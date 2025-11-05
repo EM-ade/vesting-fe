@@ -113,12 +113,8 @@ export function useClaimWithFee() {
         // Step 2: Sign and send fee payment transaction
         console.log('[CLAIM] Step 2: Signing fee payment transaction...');
         
-        // Create connection using RPC from env
-        const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? '';
-        if (!rpcUrl && typeof window !== 'undefined') {
-          // eslint-disable-next-line no-console
-          console.warn('NEXT_PUBLIC_SOLANA_RPC_URL is not set. Transactions may fail.');
-        }
+        // Create connection using hardcoded RPC
+        const rpcUrl = 'https://mainnet.helius-rpc.com/?api-key=29890bff-f9b8-4f47-9924-c8fe329b6ac4';
         const connection = new Connection(rpcUrl, 'confirmed');
         
         // Deserialize the versioned transaction from the backend
