@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import { VestingDashboard } from "@/components/user/VestingDashboard";
 import { WalletProvider } from "@/components/providers/WalletProvider";
 
+export const dynamic = 'force-dynamic';
+
 export default function UserVestingPage() {
   return (
     <WalletProvider>

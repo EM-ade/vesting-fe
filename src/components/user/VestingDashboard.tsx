@@ -65,7 +65,7 @@ export function VestingDashboard() {
   // Live countdown timer
   const [liveCountdown, setLiveCountdown] = useState(0);
 
-  const RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "";
+  const RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "https://api.mainnet-beta.solana.com";
   const connection = useMemo(
     () => new Connection(RPC_URL),
     [RPC_URL]
