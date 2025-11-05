@@ -8,6 +8,7 @@ import { apiClient } from "@/lib/apiClient";
 import { CircularProgress } from "@/components/ui/CircularProgress";
 import { RetryPrompt } from "@/components/ui/RetryPrompt";
 import { useClaimWithFee } from "@/hooks/useClaimWithFee";
+import { DEMO_WALLET, DEMO_SUMMARY, DEMO_HISTORY } from "@/lib/demoData";
 
 interface Pool {
   poolId: string;
@@ -54,14 +55,35 @@ export function VestingDashboard() {
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const isInitialLoad = useRef(true);
+  
+  // Demo mode state
+  const [demoMode, setDemoMode] = useState(false);
+  
+  // Animated percentage counter
+  const [animatedPercentage, setAnimatedPercentage] = useState(0);
+  
+  // Live countdown timer
+  const [liveCountdown, setLiveCountdown] = useState(0);
 
+  const RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "";
   const connection = useMemo(
-    () => new Connection('https://mainnet.helius-rpc.com/?api-key=17f39a5b-e46f-42f7-a4e3-3ece44a6426a'),
-    []
+    () => new Connection(RPC_URL),
+    [RPC_URL]
   );
   const loadSummary = useCallback(async () => {
     if (!wallet) {
       setSummary(null);
+      return;
+    }
+
+    // If demo mode, load demo data immediately
+    if (demoMode) {
+      setLoading(true);
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setSummary(DEMO_SUMMARY);
+      setLoading(false);
+      setLastUpdated(new Date());
       return;
     }
 
@@ -84,17 +106,22 @@ export function VestingDashboard() {
       const error = err instanceof Error ? err : new Error(String(err));
       if (!error.message.includes('404')) {
         setError(error);
-        setRetryCount(0);
       }
       setSummary(null);
     } finally {
       setLoading(false);
     }
-  }, [wallet]);
+  }, [wallet, demoMode]);
 
   const loadHistory = useCallback(async () => {
     if (!wallet) {
       setHistory([]);
+      return;
+    }
+
+    // If demo mode, load demo history
+    if (demoMode) {
+      setHistory(DEMO_HISTORY);
       return;
     }
 
@@ -113,11 +140,10 @@ export function VestingDashboard() {
       const error = err instanceof Error ? err : new Error(String(err));
       if (!error.message.includes('404')) {
         setError(error);
-        setRetryCount(0);
+        console.error('[HISTORY] Error loading claim history:', err);
       }
-      setHistory([]);
     }
-  }, [wallet]);
+  }, [wallet, demoMode]);
 
   const loadHistoryWithTimestamp = useCallback(async () => {
     await loadHistory();
@@ -156,7 +182,27 @@ export function VestingDashboard() {
     setError(null);
     setLastUpdated(null);
     isInitialLoad.current = true;
+    setDemoMode(false); // Exit demo mode when wallet changes
   }, []);
+
+  const toggleDemoMode = useCallback(() => {
+    const newDemoMode = !demoMode;
+    setDemoMode(newDemoMode);
+    
+    if (newDemoMode) {
+      // Enter demo mode
+      setWallet(DEMO_WALLET);
+      setSummary(null);
+      setHistory([]);
+      setError(null);
+    } else {
+      // Exit demo mode
+      setWallet(null);
+      setSummary(null);
+      setHistory([]);
+      setError(null);
+    }
+  }, [demoMode]);
 
   const formatNumber = (num: number) => {
     return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -164,11 +210,61 @@ export function VestingDashboard() {
 
   const formatCountdown = (seconds: number) => {
     if (seconds <= 0) return "Fully unlocked";
+    
     const days = Math.floor(seconds / 86400);
     const hours = Math.floor((seconds % 86400) / 3600);
-    return `${days}d ${hours}h`;
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    // Show different formats based on time remaining
+    if (days > 0) {
+      return `${days}d ${hours}h ${minutes}m`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes}m ${secs}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${secs}s`;
+    } else {
+      return `${secs}s`;
+    }
   };
 
+
+  // Animate percentage counter when summary changes
+  useEffect(() => {
+    if (!summary) return;
+    const target = summary.vestedPercentage;
+    const duration = 1500; // 1.5 seconds
+    const steps = 60; // 60 frames for smooth animation
+    const increment = target / steps;
+    let current = 0;
+
+    const timer = setInterval(() => {
+      current += increment;
+      if (current >= target) {
+        setAnimatedPercentage(target);
+        clearInterval(timer);
+      } else {
+        setAnimatedPercentage(current);
+      }
+    }, duration / steps);
+
+    return () => clearInterval(timer);
+  }, [summary]);
+  
+  // Initialize and update live countdown
+  useEffect(() => {
+    if (!summary) return;
+    setLiveCountdown(summary.nextUnlockTime - Math.floor(Date.now() / 1000));
+  }, [summary]);
+  
+  // Tick countdown every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLiveCountdown(prev => Math.max(0, prev - 1));
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, []);
 
   const formatDateTime = (value: string) => {
     const date = new Date(value);
@@ -259,13 +355,43 @@ export function VestingDashboard() {
             />
             <h1 className="text-xl sm:text-2xl font-bold truncate">Lil Gargs Vesting</h1>
           </div>
-          <div className="flex shrink-0">
+          <div className="flex items-center gap-3 shrink-0">
+            {/* Demo Mode Toggle */}
+            <button
+              onClick={toggleDemoMode}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                demoMode
+                  ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/50 hover:bg-yellow-500/30'
+                  : 'bg-purple-500/20 text-purple-300 border border-purple-500/50 hover:bg-purple-500/30'
+              }`}
+            >
+              {demoMode ? '✨ Exit Demo' : '👁️ View Demo'}
+            </button>
             <WalletConnectButton onWalletChange={handleWalletChange} />
           </div>
         </div>
 
+        {/* Demo Mode Banner */}
+        {demoMode && (
+          <div className="rounded-xl border-2 border-yellow-500/50 bg-yellow-500/10 p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <svg className="h-6 w-6 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-yellow-300 mb-1">Demo Mode Active</h3>
+                <p className="text-xs text-yellow-200/80">
+                  You&apos;re viewing sample data. No wallet connection required. Claims are simulated and won&apos;t execute real transactions.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Bottom row: Last updated + Refresh button */}
-        {wallet && (
+        {wallet && !demoMode && (
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
             <span className="text-xs text-white/40">Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : 'Never'}</span>
             <button
@@ -369,7 +495,7 @@ export function VestingDashboard() {
                       {/* Progress */}
                       <div className="flex-shrink-0">
                         <CircularProgress
-                          percentage={summary.vestedPercentage}
+                          percentage={animatedPercentage}
                           label="Unlocked"
                           size={140}
                           strokeWidth={10}
@@ -403,11 +529,11 @@ export function VestingDashboard() {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-white/60">Vested</span>
-                      <span className="font-semibold">{summary.vestedPercentage.toFixed(1)}%</span>
+                      <span className="font-semibold">{animatedPercentage.toFixed(1)}%</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-white/60">Time to Full Unlock</span>
-                      <span className="font-semibold">{formatCountdown(summary.nextUnlockTime - Math.floor(Date.now() / 1000))}</span>
+                      <span className="font-semibold">{formatCountdown(liveCountdown)}</span>
                     </div>
                     {/* Breakdown Toggle */}
                     {summary.totalClaimable > 0 && (
@@ -564,15 +690,18 @@ export function VestingDashboard() {
           }}
           onSuccess={(message, signature) => {
             setSuccessToast({ message, signature });
-            // Clear cache after successful claim
-            apiClient.clearCache(`vesting-summary-${wallet}`);
-            apiClient.clearCache(`claim-history-${wallet}`);
+            // Clear cache after successful claim (skip in demo mode)
+            if (!demoMode) {
+              apiClient.clearCache(`vesting-summary-${wallet}`);
+              apiClient.clearCache(`claim-history-${wallet}`);
+            }
             void loadSummary();
             void loadHistoryWithTimestamp();
             setShowClaimModal(false);
           }}
           wallet={wallet || ""}
           connection={connection}
+          demoMode={demoMode}
         />
       )}
     </div>
@@ -585,13 +714,14 @@ interface ClaimModalProps {
   onSuccess: (message: string, signature: string) => void;
   wallet: string;
   connection: Connection;
+  demoMode?: boolean;
 }
 
-function ClaimModal({ summary, onClose, onSuccess }: ClaimModalProps) {
+function ClaimModal({ summary, onClose, onSuccess, demoMode }: ClaimModalProps) {
   const [amount, setAmount] = useState<string>("");
   const [claimStep, setClaimStep] = useState<"input" | "signing" | "processing">("input");
   const [error, setError] = useState<string | null>(null);
-  const { executeClaim, loading } = useClaimWithFee();
+  const { executeClaim, loading, status, progress } = useClaimWithFee();
 
   // Clear error when component mounts
   useEffect(() => {
@@ -610,6 +740,14 @@ function ClaimModal({ summary, onClose, onSuccess }: ClaimModalProps) {
     }
 
     const claimAmount = parseFloat(amount);
+    
+    // Minimum claim amount validation (matches backend)
+    const MIN_CLAIM_AMOUNT = 0.001;
+    if (claimAmount < MIN_CLAIM_AMOUNT) {
+      setError(`Minimum claim amount is ${MIN_CLAIM_AMOUNT} tokens`);
+      return;
+    }
+    
     if (claimAmount > summary.totalClaimable) {
       setError(`Amount exceeds available balance of ${summary.totalClaimable.toFixed(2)}`);
       return;
@@ -617,6 +755,16 @@ function ClaimModal({ summary, onClose, onSuccess }: ClaimModalProps) {
 
     setError(null);
     setClaimStep("signing");
+
+    // Demo mode: simulate claim without real transaction
+    if (demoMode) {
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate delay
+      onSuccess(
+        `Demo: Successfully claimed ${claimAmount.toLocaleString()} $GARG`,
+        'DemoTxSignature...123abc'
+      );
+      return;
+    }
 
     try {
       // Execute the full claim flow: prepare -> sign -> submit
@@ -628,21 +776,50 @@ function ClaimModal({ summary, onClose, onSuccess }: ClaimModalProps) {
           result.tokenTransactionSignature
         );
       } else {
-        setError("Failed to complete claim transaction");
+        setError("Transaction failed. Please try again.");
         setClaimStep("input");
       }
     } catch (err) {
+      let errorMessage = "Something went wrong. Please try again.";
+      
       if (err instanceof Error) {
-        if (err.message.includes('exceeds available balance')) {
-          setError(err.message);
-        } else if (err.message.includes('User rejected')) {
-          setError("Transaction cancelled by user");
-        } else {
-          setError(`Failed to claim rewards: ${err.message}`);
+        const msg = err.message.toLowerCase();
+        
+        // User cancelled/rejected transaction
+        if (msg.includes('user rejected') || msg.includes('user cancelled') || msg.includes('user denied')) {
+          errorMessage = "You cancelled the transaction. No tokens were claimed.";
         }
-      } else {
-        setError("Failed to claim rewards");
+        // Insufficient funds for fee
+        else if (msg.includes('insufficient funds') || msg.includes('insufficient lamports') || msg.includes('not enough sol')) {
+          errorMessage = "Insufficient SOL for transaction fee. Please add SOL to your wallet.";
+        }
+        // Exceeds available balance
+        else if (msg.includes('exceeds available balance') || msg.includes('exceeds balance')) {
+          errorMessage = "Amount exceeds your available balance. Try refreshing or claiming less.";
+        }
+        // Network/timeout errors
+        else if (msg.includes('timeout') || msg.includes('timed out')) {
+          errorMessage = "Transaction timed out. It may still succeed - check your history in a moment.";
+        }
+        // Transaction failed on-chain
+        else if (msg.includes('transaction failed') || msg.includes('failed on-chain')) {
+          errorMessage = "Transaction failed on blockchain. Please try again with a smaller amount.";
+        }
+        // Wallet not connected
+        else if (msg.includes('wallet not connected') || msg.includes('not connected')) {
+          errorMessage = "Wallet disconnected. Please reconnect your wallet and try again.";
+        }
+        // Minimum amount error
+        else if (msg.includes('minimum claim amount')) {
+          errorMessage = err.message; // Use exact message from backend
+        }
+        // Generic error with message
+        else if (err.message && err.message.length < 100) {
+          errorMessage = err.message;
+        }
       }
+      
+      setError(errorMessage);
       setClaimStep("input");
     }
   };
@@ -650,21 +827,60 @@ function ClaimModal({ summary, onClose, onSuccess }: ClaimModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0c0b25] p-6 space-y-4">
-        {/* Signing State */}
+        {/* Progressive Status Display */}
         {claimStep === "signing" && (
           <>
             <div className="flex items-center justify-center py-8">
-              <div className="relative h-16 w-16">
-                <div className="absolute inset-0 rounded-full border-4 border-white/10" />
-                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-purple-500 animate-spin" />
+              <div className="relative h-24 w-24">
+                <svg className="transform -rotate-90" width="96" height="96">
+                  <circle
+                    cx="48"
+                    cy="48"
+                    r="40"
+                    stroke="rgba(255,255,255,0.1)"
+                    strokeWidth="8"
+                    fill="none"
+                  />
+                  <circle
+                    cx="48"
+                    cy="48"
+                    r="40"
+                    stroke="#a855f7"
+                    strokeWidth="8"
+                    fill="none"
+                    strokeDasharray={`${2 * Math.PI * 40}`}
+                    strokeDashoffset={`${2 * Math.PI * 40 * (1 - progress / 100)}`}
+                    className="transition-all duration-500"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">{progress}%</span>
+                </div>
               </div>
             </div>
-            <p className="text-center text-white font-semibold">Waiting for Signature...</p>
-            <p className="text-center text-sm text-white/60">Please approve the transaction in your wallet</p>
+            
+            <div className="space-y-2">
+              <p className="text-center text-white font-semibold">
+                {status === 'preparing' && 'Preparing Claim...'}
+                {status === 'signing_fee' && 'Waiting for Signature...'}
+                {status === 'confirming_fee' && 'Confirming Fee Payment...'}
+                {status === 'processing_claim' && 'Processing Claim...'}
+                {status === 'confirming_claim' && 'Confirming Transaction...'}
+                {status === 'success' && 'Claim Successful!'}
+              </p>
+              <p className="text-center text-sm text-white/60">
+                {status === 'preparing' && 'Calculating available amounts...'}
+                {status === 'signing_fee' && 'Please approve the transaction in your wallet'}
+                {status === 'confirming_fee' && 'Waiting for blockchain confirmation...'}
+                {status === 'processing_claim' && 'Transferring tokens from treasury...'}
+                {status === 'confirming_claim' && 'Verifying transaction on Solana...'}
+                {status === 'success' && 'Your tokens have been claimed!'}
+              </p>
+            </div>
           </>
         )}
 
-        {/* Processing State */}
+        {/* Processing State (Legacy - kept for compatibility) */}
         {claimStep === "processing" && (
           <>
             <div className="flex items-center justify-center py-8">
@@ -699,12 +915,14 @@ function ClaimModal({ summary, onClose, onSuccess }: ClaimModalProps) {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm text-white/60">Enter Amount</label>
+              <label className="text-sm text-white/60">Enter Amount (min: 0.001)</label>
               <input
                 type="number"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
+                step="0.001"
+                min="0.001"
                 className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 focus:border-purple-500 focus:outline-none"
               />
             </div>
@@ -734,21 +952,48 @@ function ClaimModal({ summary, onClose, onSuccess }: ClaimModalProps) {
             {/* Removed per redesign: no breakdown needed in the withdrawal modal */}
 
             {error && (
-              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="flex-1">{error}</span>
-                  {error.includes('exceeds available balance') && (
-                    <button 
-                      onClick={() => {
-                        setError(null);
-                        // Refresh the summary data
-                        window.dispatchEvent(new CustomEvent('refresh-summary'));
-                      }}
-                      className="text-xs underline hover:text-red-300 whitespace-nowrap"
-                    >
-                      Refresh balance
-                    </button>
-                  )}
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    {error.includes('cancelled') ? (
+                      <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    ) : error.includes('Insufficient SOL') ? (
+                      <svg className="w-5 h-5 text-orange-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className={`text-sm font-medium ${
+                      error.includes('cancelled') ? 'text-yellow-300' : 
+                      error.includes('Insufficient SOL') ? 'text-orange-300' : 
+                      'text-red-300'
+                    }`}>
+                      {error}
+                    </p>
+                    {error.includes('Insufficient SOL') && (
+                      <p className="text-xs text-white/60 mt-1">
+                        You need a small amount of SOL (~0.01) to pay for the transaction fee.
+                      </p>
+                    )}
+                    {error.includes('exceeds available balance') && (
+                      <button 
+                        onClick={() => {
+                          setError(null);
+                          window.dispatchEvent(new CustomEvent('refresh-summary'));
+                        }}
+                        className="text-xs text-purple-400 hover:text-purple-300 underline mt-1"
+                      >
+                        Refresh balance
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

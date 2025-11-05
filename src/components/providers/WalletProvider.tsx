@@ -6,7 +6,7 @@ import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { PhantomWalletAdapter, SolflareWalletAdapter, TorusWalletAdapter } from "@solana/wallet-adapter-wallets";
 import "@solana/wallet-adapter-react-ui/styles.css";
 
-const RPC_ENDPOINT = "https://mainnet.helius-rpc.com/?api-key=17f39a5b-e46f-42f7-a4e3-3ece44a6426a";
+const RPC_ENDPOINT = "https://mainnet.helius-rpc.com/?api-key=29890bff-f9b8-4f47-9924-c8fe329b6ac4";
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const wallets = useMemo(

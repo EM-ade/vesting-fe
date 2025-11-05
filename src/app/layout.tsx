@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Admin Vesting Console",
-  description: "Control panel for Solana NFT vesting operations",
+  title: "Lil Gargs Vesting",
+  description: "Claim your $GARG token rewards from Lil Gargs vesting pools",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
@@ -15,6 +19,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="bg-[#0c0b25] antialiased">
         {children}
+        <Analytics />
       </body>
     </html>
   );
