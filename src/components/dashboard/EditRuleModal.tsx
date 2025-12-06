@@ -144,7 +144,7 @@ export function EditRuleModal({ open, onClose, rule, poolId, onSuccess }: EditRu
           <Button variant="secondary" onClick={onClose} disabled={loading} className="flex-1">
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleSave} disabled={loading} className="flex-1">
+          <Button variant="default" onClick={handleSave} disabled={loading} className="flex-1">
             {loading ? "Saving..." : "Save Changes"}
           </Button>
         </div>

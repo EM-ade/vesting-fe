@@ -26,7 +26,12 @@ export function useAdminAuth() {
 
       try {
         // Check if wallet is admin
-        const response = await api.get<{ success: boolean; isAdmin: boolean }>(`/config/check-admin?wallet=${publicKey.toBase58()}`);
+        const projectId = localStorage.getItem('selectedProjectId');
+        const url = projectId 
+          ? `/config/check-admin?wallet=${publicKey.toBase58()}&projectId=${projectId}`
+          : `/config/check-admin?wallet=${publicKey.toBase58()}`;
+          
+        const response = await api.get<{ success: boolean; isAdmin: boolean }>(url);
         
         if (response.success && response.isAdmin) {
           setIsAdmin(true);

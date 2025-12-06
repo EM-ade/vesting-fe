@@ -36,10 +36,10 @@ export function Modal({ open, title, description, children, footer, onClose, wid
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/50 backdrop-blur">
+    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
       <div
         className={cn(
-          "glass-panel relative max-h-[80vh] w-full overflow-hidden overflow-y-auto rounded-2xl p-6 text-white shadow-2xl",
+          "glass-panel relative max-h-[80vh] w-full overflow-hidden overflow-y-auto rounded-2xl p-6 text-white shadow-2xl bg-[#0c0b25] border border-white/10",
           widthClassName ?? "max-w-xl"
         )}
       >

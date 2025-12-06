@@ -1,59 +1,52 @@
-"use client";
+import * as React from "react"
+import { cn } from "@/lib/utils"
+import { Loader2 } from "lucide-react"
 
-import { forwardRef } from "react";
-import { cn } from "@/lib/utils";
+const buttonVariants = {
+  variant: {
+    default: "bg-[var(--accent)] text-white shadow hover:bg-[var(--accent)]/90 hover:shadow-[0_0_15px_var(--accent-glow)] border border-transparent hover:border-[var(--accent-glow)]",
+    destructive: "bg-red-500 text-white shadow-sm hover:bg-red-600",
+    outline: "border border-white/20 bg-transparent shadow-sm hover:bg-white/10 hover:text-white hover:border-[var(--accent-glow)]",
+    secondary: "bg-[var(--accent-secondary)] text-white shadow-sm hover:bg-[var(--accent-secondary)]/80 hover:shadow-[0_0_15px_var(--accent-secondary)]",
+    ghost: "hover:bg-white/10 hover:text-white",
+    link: "text-[var(--accent)] underline-offset-4 hover:underline",
+  },
+  size: {
+    default: "h-9 px-4 py-2",
+    sm: "h-8 rounded-md px-3 text-xs",
+    lg: "h-10 rounded-md px-8",
+    icon: "h-9 w-9",
+  },
+}
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
-type Size = "sm" | "md" | "lg" | "icon";
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: keyof typeof buttonVariants.variant
+  size?: keyof typeof buttonVariants.size
+  asChild?: boolean
+  loading?: boolean
+}
 
-type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: Variant;
-  size?: Size;
-  loading?: boolean;
-};
-
-const variantStyles: Record<Variant, string> = {
-  primary:
-    "bg-[var(--accent)] text-[var(--foreground)] font-medium shadow-[0_10px_30px_-12px_rgba(103,91,255,0.7)] hover:bg-[var(--accent)]/90 disabled:bg-gray-600 disabled:text-gray-400 disabled:shadow-none",
-  secondary:
-    "bg-[var(--accent-soft)] text-[var(--foreground)] hover:bg-[var(--accent-soft)]/80 disabled:bg-gray-600 disabled:text-gray-400",
-  ghost:
-    "bg-transparent text-[var(--foreground)] hover:bg-white/5 disabled:text-gray-500",
-  danger:
-    "bg-[var(--danger)] text-white hover:bg-[var(--danger)]/85 disabled:bg-gray-600 disabled:text-gray-400",
-};
-
-const sizeStyles: Record<Size, string> = {
-  sm: "h-8 px-3 text-xs",
-  md: "h-10 px-4 text-sm",
-  lg: "h-12 px-6 text-base",
-  icon: "h-10 w-10 p-0 flex items-center justify-center",
-};
-
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "primary", size = "md", loading, children, disabled, ...props }, ref) => {
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant = "default", size = "default", loading, children, disabled, ...props }, ref) => {
     return (
       <button
-        ref={ref}
         className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-full transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed",
-          variantStyles[variant],
-          sizeStyles[size],
-          loading && "opacity-80",
+          "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 font-orbitron tracking-wider",
+          buttonVariants.variant[variant],
+          buttonVariants.size[size],
           className
         )}
+        ref={ref}
         disabled={disabled || loading}
         {...props}
       >
-        {loading && (
-          <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/70 border-r-transparent" />
-        )}
+        {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
         {children}
       </button>
-    );
+    )
   }
-);
+)
+Button.displayName = "Button"
 
-Button.displayName = "Button";
-
-export type { ButtonProps };
+export { Button }

@@ -64,7 +64,7 @@ export function RuleTable({ rules, onToggle, onEdit }: RuleTableProps) {
                   </Button>
                   <Button
                     size="sm"
-                    variant={rule.enabled ? "secondary" : "primary"}
+                    variant={rule.enabled ? "secondary" : "default"}
                     onClick={() => onToggle(rule.id)}
                   >
                     {rule.enabled ? "Disable" : "Enable"}

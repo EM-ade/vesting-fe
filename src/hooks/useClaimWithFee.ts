@@ -114,7 +114,7 @@ export function useClaimWithFee() {
         console.log('[CLAIM] Step 2: Signing fee payment transaction...');
         
         // Create connection using hardcoded RPC
-        const rpcUrl = 'https://mainnet.helius-rpc.com/?api-key=29890bff-f9b8-4f47-9924-c8fe329b6ac4';
+        const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
         const connection = new Connection(rpcUrl, 'confirmed');
         
         // Deserialize the versioned transaction from the backend
@@ -130,18 +130,39 @@ export function useClaimWithFee() {
           blockhash: feeTransaction.message.recentBlockhash.substring(0, 8) + '...',
         });
         
+        // Get a fresh blockhash to avoid "Blockhash not found" errors
+        console.log('[CLAIM] Getting fresh blockhash...');
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+        
+        // Update the transaction with fresh blockhash
+        feeTransaction.message.recentBlockhash = blockhash;
+        
+        console.log('[CLAIM] Updated with fresh blockhash:', {
+          blockhash: blockhash.substring(0, 8) + '...',
+          lastValidBlockHeight
+        });
+        
         const signedFeeTx = await signTransaction(feeTransaction);
         console.log('[CLAIM] Fee transaction signed, sending...');
         
         setProgress(40);
         setStatus('confirming_fee');
         
-        const feeSignature = await connection.sendRawTransaction(signedFeeTx.serialize());
+        const feeSignature = await connection.sendRawTransaction(signedFeeTx.serialize(), {
+          skipPreflight: false,
+          maxRetries: 3
+        });
         console.log('[CLAIM] Fee payment sent:', feeSignature);
         
-        // Wait for fee transaction confirmation with polling
+        // Wait for fee transaction confirmation with timeout
         console.log('[CLAIM] Waiting for fee payment confirmation...');
-        await connection.confirmTransaction(feeSignature, 'confirmed');
+        const confirmStrategy = {
+          signature: feeSignature,
+          blockhash: blockhash,
+          lastValidBlockHeight: lastValidBlockHeight
+        };
+        
+        await connection.confirmTransaction(confirmStrategy, 'confirmed');
         console.log('[CLAIM] Fee payment confirmed!');
         
         setProgress(60);

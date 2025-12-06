@@ -213,7 +213,7 @@ export function AdminPoolManager({ poolId, poolName, poolState, onPoolStateChang
               
               {poolState === "paused" && (
                 <Button 
-                  variant="primary" 
+                  variant="default" 
                   size="sm" 
                   onClick={() => setConfirmAction("resume")}
                   disabled={stateLoading}
@@ -224,7 +224,7 @@ export function AdminPoolManager({ poolId, poolName, poolState, onPoolStateChang
               
               {(poolState === "active" || poolState === "paused") && (
                 <Button 
-                  variant="danger" 
+                  variant="destructive" 
                   size="sm" 
                   onClick={() => setConfirmAction("cancel")}
                   disabled={stateLoading}
@@ -337,7 +337,7 @@ export function AdminPoolManager({ poolId, poolName, poolState, onPoolStateChang
                                     Edit
                                   </Button>
                                   <Button 
-                                    variant="danger" 
+                                    variant="destructive" 
                                     size="sm" 
                                     onClick={() => removeMember(member)}
                                   >
@@ -469,7 +469,7 @@ export function AdminPoolManager({ poolId, poolName, poolState, onPoolStateChang
               Cancel
             </Button>
             <Button 
-              variant={confirmAction === "cancel" ? "danger" : "primary"}
+              variant={confirmAction === "cancel" ? "destructive" : "default"}
               size="sm" 
               loading={stateLoading}
               onClick={() => confirmAction && updatePoolState(confirmAction)}

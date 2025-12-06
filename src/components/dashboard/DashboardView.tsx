@@ -21,6 +21,9 @@ import type {
 import { api } from "@/lib/api";
 // import { cn } from "@/lib/utils";
 import { formatTokenAmount } from "@/lib/formatters";
+import { useProject } from "@/contexts/ProjectContext";
+import { OnboardingModal } from "@/components/admin/OnboardingModal";
+
 type DashboardViewProps = {
   initialRules: SnapshotRule[];
   initialSummary: SnapshotSummaryResponse | null;
@@ -58,6 +61,7 @@ const INITIAL_METRICS: DashboardMetrics = {
 };
 
 export function DashboardView({ initialRules, initialSummary, initialMetrics }: DashboardViewProps) {
+  const { currentProject } = useProject();
   const [rules, setRules] = useState<SnapshotRule[]>(initialRules || []);
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     ...INITIAL_METRICS,
@@ -99,16 +103,18 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
 
   useEffect(() => {
     if (initialSummary) return;
-    refreshSummary();
-    loadActivePoolData();
-    loadActivityLogs();
+    if (currentProject) {
+      refreshSummary();
+      loadActivePoolData();
+      loadActivityLogs();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentProject?.id]);
 
   // Load active pool data from backend
   async function loadActivePoolData() {
     try {
-      console.log("Loading pool data...");
+      console.log(`Loading pool data for project ${currentProject?.name}...`);
       const pools = await api.get<Array<Record<string, unknown>>>("/pools");
       console.log("Pools loaded:", pools);
       
@@ -424,6 +430,7 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
 
   return (
     <div className="flex flex-col gap-8">
+      <OnboardingModal />
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Pool Balance"
@@ -565,7 +572,7 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
                 {poolVestingMode === 'dynamic' && (
                   <>
                     <Button 
-                      variant="primary" 
+                      variant="default" 
                       size="sm" 
                       onClick={syncDynamicPool}
                       loading={syncLoading}

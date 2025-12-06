@@ -178,6 +178,16 @@ async function request<T>(
         reqHeaders.set("Accept", "application/json");
       }
 
+      // Add project ID if available
+      if (typeof window !== 'undefined') {
+        const projectId = localStorage.getItem('selectedProjectId');
+        if (projectId) {
+          reqHeaders.set('x-project-id', projectId);
+        }
+      }
+
+      // Project ID from options is already handled by headers spread above
+
       let body: BodyInit | undefined;
       if (json !== undefined) {
         reqHeaders.set("Content-Type", "application/json");

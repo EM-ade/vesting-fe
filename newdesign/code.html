@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Lilgargs Vesting Landing Page</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings:
+            'FILL' 0,
+            'wght' 400,
+            'GRAD' 0,
+            'opsz' 24
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#135bec",
+              "background-light": "#f6f6f8",
+              "background-dark": "#101622",
+            },
+            fontFamily: {
+              "display": ["Manrope", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+</head>
+<body class="font-display">
+<div class="relative flex h-auto min-h-screen w-full flex-col bg-background-light dark:bg-background-dark group/design-root overflow-x-hidden">
+<div class="layout-container flex h-full grow flex-col">
+<div class="px-4 sm:px-8 md:px-20 lg:px-40 flex flex-1 justify-center py-5">
+<div class="layout-content-container flex flex-col max-w-[960px] flex-1">
+<!-- TopNavBar -->
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-white/10 dark:border-b-[#232f48] px-6 sm:px-10 py-3">
+<div class="flex items-center gap-4 text-white">
+<div class="size-4 text-primary">
+<svg fill="none" viewbox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+<path d="M42.4379 44C42.4379 44 36.0744 33.9038 41.1692 24C46.8624 12.9336 42.2078 4 42.2078 4L7.01134 4C7.01134 4 11.6577 12.932 5.96912 23.9969C0.876273 33.9029 7.27094 44 7.27094 44L42.4379 44Z" fill="currentColor"></path>
+</svg>
+</div>
+<h2 class="text-white text-lg font-bold leading-tight tracking-[-0.015em]">Lilgargs Vesting</h2>
+</div>
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em]">
+<span class="truncate">Connect Wallet</span>
+</button>
+</header>
+<!-- Main Content -->
+<main class="flex-grow">
+<!-- HeroSection -->
+<div class="relative @container overflow-hidden">
+<div class="absolute inset-0 z-0">
+<div class="absolute -top-20 -left-40 w-96 h-96 bg-primary/20 rounded-full blur-3xl opacity-50"></div>
+<div class="absolute -bottom-20 -right-40 w-96 h-96 bg-[#E01A6D]/10 rounded-full blur-3xl opacity-50"></div>
+</div>
+<div class="relative z-10 @[480px]:p-4">
+<div class="flex min-h-[480px] flex-col gap-6 bg-transparent @[480px]:gap-8 items-center justify-center p-4 text-center">
+<div class="flex flex-col gap-2">
+<h1 class="text-white text-4xl font-black leading-tight tracking-[-0.033em] @[480px]:text-5xl @[480px]:font-black @[480px]:leading-tight @[480px]:tracking-[-0.033em]">
+                    Streamlined Token Vesting
+                  </h1>
+<h2 class="text-white/80 text-sm font-normal leading-normal @[480px]:text-base @[480px]:font-normal @[480px]:leading-normal max-w-2xl mx-auto">
+                    The Lilgargs protocol for token streaming provides a seamless and secure infrastructure for managing and claiming vested tokens over time.
+                  </h2>
+</div>
+<div class="flex-wrap gap-3 flex justify-center">
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 @[480px]:h-12 @[480px]:px-5 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] @[480px]:text-base @[480px]:font-bold @[480px]:leading-normal @[480px]:tracking-[0.015em]">
+<span class="truncate">Claim Tokens</span>
+</button>
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 @[480px]:h-12 @[480px]:px-5 bg-[#232f48] text-white text-sm font-bold leading-normal tracking-[0.015em] @[480px]:text-base @[480px]:font-bold @[480px]:leading-normal @[480px]:tracking-[0.015em]">
+<span class="truncate">Admin System</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- FeatureSection -->
+<div class="flex flex-col gap-10 px-4 py-10 @container">
+<div class="flex flex-col gap-4 text-center items-center">
+<h1 class="text-white tracking-light text-[32px] font-bold leading-tight @[480px]:text-4xl @[480px]:font-black @[480px]:leading-tight @[480px]:tracking-[-0.033em] max-w-[720px]">
+                Why Choose Lilgargs Vesting?
+              </h1>
+<p class="text-white/80 text-base font-normal leading-normal max-w-[720px]">
+                Our platform offers unparalleled security, flexibility, and ease of use for both token holders and administrators.
+              </p>
+</div>
+<div class="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4 p-0">
+<div class="flex flex-1 gap-3 rounded-lg border border-[#324467] bg-[#192233] p-4 flex-col">
+<div class="text-primary">
+<span class="material-symbols-outlined text-3xl">lock</span>
+</div>
+<div class="flex flex-col gap-1">
+<h2 class="text-white text-base font-bold leading-tight">Secure Streaming</h2>
+<p class="text-[#92a4c9] text-sm font-normal leading-normal">Tokens are streamed securely on-chain, ensuring trust and transparency.</p>
+</div>
+</div>
+<div class="flex flex-1 gap-3 rounded-lg border border-[#324467] bg-[#192233] p-4 flex-col">
+<div class="text-primary">
+<span class="material-symbols-outlined text-3xl">download</span>
+</div>
+<div class="flex flex-col gap-1">
+<h2 class="text-white text-base font-bold leading-tight">Real-Time Claims</h2>
+<p class="text-[#92a4c9] text-sm font-normal leading-normal">Claim your vested tokens at any moment with a simple, intuitive interface.</p>
+</div>
+</div>
+<div class="flex flex-1 gap-3 rounded-lg border border-[#324467] bg-[#192233] p-4 flex-col">
+<div class="text-primary">
+<span class="material-symbols-outlined text-3xl">settings</span>
+</div>
+<div class="flex flex-col gap-1">
+<h2 class="text-white text-base font-bold leading-tight">Admin Control</h2>
+<p class="text-[#92a4c9] text-sm font-normal leading-normal">Easily manage vesting schedules and permissions through our powerful admin system.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- CTASection -->
+<div class="@container">
+<div class="flex flex-col justify-end gap-6 px-4 py-10 @[480px]:gap-8 @[480px]:px-10 @[480px]:py-20">
+<div class="flex flex-col gap-2 text-center items-center">
+<h1 class="text-white tracking-light text-[32px] font-bold leading-tight @[480px]:text-4xl @[480px]:font-black @[480px]:leading-tight @[480px]:tracking-[-0.033em] max-w-[720px]">
+                  Ready to get started?
+                </h1>
+<p class="text-white/80 text-base font-normal leading-normal max-w-[720px]">Connect your wallet to claim your tokens or access the admin dashboard.</p>
+</div>
+<div class="flex flex-1 justify-center">
+<div class="flex justify-center">
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 @[480px]:h-12 @[480px]:px-5 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] @[480px]:text-base @[480px]:font-bold @[480px]:leading-normal @[480px]:tracking-[0.015em] grow">
+<span class="truncate">Connect Wallet</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="flex flex-col gap-6 px-5 py-10 text-center @container border-t border-solid border-white/10 dark:border-t-[#232f48]">
+<div class="flex flex-wrap items-center justify-center gap-6 @[480px]:flex-row @[480px]:justify-around">
+<a class="text-[#92a4c9] text-base font-normal leading-normal min-w-40" href="#">Documentation</a>
+<a class="text-[#92a4c9] text-base font-normal leading-normal min-w-40" href="#">Terms of Service</a>
+<a class="text-[#92a4c9] text-base font-normal leading-normal min-w-40" href="#">Privacy Policy</a>
+</div>
+<div class="flex flex-wrap justify-center gap-4">
+<a href="#">
+<div class="text-[#92a4c9]"><span class="material-symbols-outlined">alternate_email</span></div>
+</a>
+<a href="#">
+<div class="text-[#92a4c9]"><span class="material-symbols-outlined">send</span></div>
+</a>
+<a href="#">
+<div class="text-[#92a4c9]"><span class="material-symbols-outlined">hub</span></div>
+</a>
+</div>
+<p class="text-[#92a4c9] text-base font-normal leading-normal">© 2024 Lilgargs Vesting. All rights reserved.</p>
+</footer>
+</div>
+</div>
+</div>
+</div>
+</body></html>

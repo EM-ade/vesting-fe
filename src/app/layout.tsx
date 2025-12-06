@@ -1,10 +1,18 @@
 import type { Metadata } from "next";
+import { Manrope } from 'next/font/google';
 import { Analytics } from "@vercel/analytics/react";
+import AppWalletProvider from "@/components/wallet/AppWalletProvider";
 import "./globals.css";
 
+const manrope = Manrope({
+  subsets: ['latin'],
+  variable: '--font-manrope',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
-  title: "Lil Gargs Vesting",
-  description: "Claim your $GARG token rewards from Lil Gargs vesting pools",
+  title: "Lil Gargs Vesting | Secure Distribution",
+  description: "Advanced token streaming protocol for the LilGarg ecosystem.",
   icons: {
     icon: "/favicon.ico",
   },
@@ -16,9 +24,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="bg-[#0c0b25] antialiased">
-        {children}
+    <html lang="en" className={`${manrope.variable}`} suppressHydrationWarning>
+      <body className="bg-[#030305] antialiased font-manrope text-white selection:bg-blue-500/30">
+        <AppWalletProvider>
+          {children}
+        </AppWalletProvider>
         <Analytics />
       </body>
     </html>

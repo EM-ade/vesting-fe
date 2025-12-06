@@ -151,10 +151,10 @@ export function SettingsView() {
               <p className="text-xs uppercase tracking-[0.25em] text-white/50">Current Mode</p>
               <p className="mt-2 text-xl font-semibold text-white">{config.mode.toUpperCase()}</p>
               <div className="mt-4 flex gap-2">
-                <Button size="sm" variant={config.mode === "snapshot" ? "primary" : "ghost"} onClick={() => switchMode("snapshot")} disabled={loading}>
+                <Button size="sm" variant={config.mode === "snapshot" ? "default" : "ghost"} onClick={() => switchMode("snapshot")} disabled={loading}>
                   Snapshot
                 </Button>
-                <Button size="sm" variant={config.mode === "dynamic" ? "primary" : "ghost"} onClick={() => switchMode("dynamic")} disabled={loading}>
+                <Button size="sm" variant={config.mode === "dynamic" ? "default" : "ghost"} onClick={() => switchMode("dynamic")} disabled={loading}>
                   Dynamic
                 </Button>
               </div>
