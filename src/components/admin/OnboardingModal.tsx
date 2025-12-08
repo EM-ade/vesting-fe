@@ -75,12 +75,14 @@ export function OnboardingModal() {
     try {
       await api.put(`/projects/${currentProject.id}`, {
         mint_address: mintAddress,
-        adminWallet: publicKey?.toBase58() // For auth verification
+        adminWallet: publicKey?.toBase58(), // For auth verification
+        projectId: currentProject.id // For project-scoped auth
       });
       await fetchProjectDetails();
       setStep(3);
     } catch (err) {
       console.error("Failed to update mint:", err);
+      alert(`Failed to save token configuration: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }

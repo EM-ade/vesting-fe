@@ -56,12 +56,22 @@ export function TreasuryWidget() {
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [balanceInfo, setBalanceInfo] = useState<AvailableBalance | null>(null);
 
-  // Mock data for multi-token support if backend doesn't provide it yet
-  const tokens = treasuryStatus?.treasury.tokens || [
-    { symbol: treasuryStatus?.treasury.tokenMint ? "Token" : "GARG", balance: treasuryStatus?.treasury.balance || 0, mint: treasuryStatus?.treasury.tokenMint || "" }
-  ];
+  // Use tokens from backend if available, otherwise create default with project symbol
+  const tokens = treasuryStatus?.treasury.tokens && treasuryStatus.treasury.tokens.length > 0
+    ? treasuryStatus.treasury.tokens
+    : [
+        {
+          symbol: currentProject?.symbol || "Token",
+          balance: treasuryStatus?.treasury.balance || 0,
+          mint: treasuryStatus?.treasury.tokenMint || ""
+        }
+      ];
 
-  const activeToken = tokens[activeTokenIndex] || tokens[0];
+  const activeToken = tokens[activeTokenIndex] || tokens[0] || { symbol: 'N/A', balance: 0, mint: '' };
+  
+  // Check if currently selected token for withdrawal is SOL
+  const selectedWithdrawToken = tokens.find(t => t.mint === withdrawTokenMint);
+  const isSOLWithdraw = selectedWithdrawToken?.symbol === 'SOL';
 
   useEffect(() => {
     if (currentProject) {
@@ -133,17 +143,21 @@ export function TreasuryWidget() {
 
     setWithdrawLoading(true);
     try {
-      const response = await api.post<{ success: boolean; signature: string }>("/treasury/withdraw", {
+      // Choose endpoint based on token type
+      const endpoint = isSOLWithdraw ? "/treasury/withdraw-sol" : "/treasury/withdraw";
+      
+      const response = await api.post<{ success: boolean; signature: string }>(endpoint, {
         amount: parseFloat(withdrawAmount),
         recipientAddress: withdrawRecipient,
         note: withdrawNote,
-        tokenMint: withdrawTokenMint,
+        tokenMint: isSOLWithdraw ? undefined : withdrawTokenMint, // Only send tokenMint for SPL tokens
       });
 
       toast.success(`Withdrawal successful! ${response.signature}`);
       setWithdrawOpen(false);
       setWithdrawAmount("");
       setWithdrawNote("");
+      setWithdrawRecipient("");
       fetchTreasuryStatus();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Withdrawal failed";
@@ -207,11 +221,10 @@ export function TreasuryWidget() {
         {/* Main Balance */}
         <div className="space-y-2">
           <div className="flex justify-between items-center">
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Available Balance</p>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Treasury Token Available Balance</p>
           </div>
           <div className="flex items-end gap-3">
-            <span className="text-3xl font-bold text-white tracking-tight">{formatTokenAmount(activeToken.balance)}</span>
-            <span className="text-sm text-slate-500 font-mono mb-1.5">{activeToken.symbol}</span>
+            <span className="text-3xl font-bold text-white tracking-tight">{formatTokenAmount(activeToken?.balance || 0, true, activeToken?.symbol)}</span>
           </div>
 
           <div className="flex items-center gap-2 mt-2 group cursor-pointer" onClick={copyAddress}>
@@ -288,7 +301,7 @@ export function TreasuryWidget() {
             />
           </div>
           <p className="text-[10px] text-slate-600">
-            Required: {formatTokenAmount(allocations.remainingNeeded, false)} • Available: {formatTokenAmount(status.buffer, false)}
+            Required: {formatTokenAmount(allocations.remainingNeeded, true, activeToken?.symbol)} • Available: {formatTokenAmount(status.buffer, true, activeToken?.symbol)}
           </p>
         </div>
 
@@ -337,7 +350,7 @@ export function TreasuryWidget() {
               >
                 {tokens.map((token) => (
                   <option key={token.mint} value={token.mint}>
-                    {token.symbol} ({formatTokenAmount(token.balance)} available)
+                    {token.symbol} ({token.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} available)
                   </option>
                 ))}
               </select>
@@ -367,7 +380,7 @@ export function TreasuryWidget() {
             <Button
               onClick={handleWithdraw}
               loading={withdrawLoading}
-              disabled={!withdrawAmount || !withdrawRecipient || (balanceInfo ? parseFloat(withdrawAmount) > balanceInfo.available : false)}
+              disabled={!withdrawAmount || !withdrawRecipient || (!isSOLWithdraw && balanceInfo ? parseFloat(withdrawAmount) > balanceInfo.available : false)}
               className="w-full bg-purple-500 hover:bg-purple-600 text-sm h-9"
             >
               Confirm Withdrawal

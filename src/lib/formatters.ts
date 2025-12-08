@@ -1,7 +1,7 @@
 /**
  * Format token amounts with M/B suffixes
  */
-export function formatTokenAmount(amount: number, includeToken = true): string {
+export function formatTokenAmount(amount: number, includeToken = true, tokenSymbol = ''): string {
   const billion = 1_000_000_000;
   const million = 1_000_000;
   
@@ -17,7 +17,7 @@ export function formatTokenAmount(amount: number, includeToken = true): string {
     formatted = amount.toFixed(2);
   }
   
-  return includeToken ? `${formatted} GARG` : formatted;
+  return includeToken && tokenSymbol ? `${formatted} ${tokenSymbol}` : formatted;
 }
 
 /**

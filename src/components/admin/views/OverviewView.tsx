@@ -69,7 +69,7 @@ export function OverviewView() {
           api.get<ChartData[]>('/metrics/claim-history-stats'),
           api.get<{ claims: RecentClaim[] }>('/claims?limit=5'),
           api.get<ClaimStats>('/claims/stats').catch(() => null),
-          api.get<{ count: number }>('/metrics/eligible-wallets').catch(() => ({ count: 0 })),
+          api.get<{ count: number }>(`/metrics/eligible-wallets?projectId=${currentProject?.id}`).catch(() => ({ count: 0 })),
           api.get<{ activities: ActivityLogItem[] }>('/metrics/activity-log?limit=10').catch(() => ({ activities: [] }))
         ]);
 

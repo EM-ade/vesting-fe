@@ -14,6 +14,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     reqHeaders.set("Accept", "application/json");
   }
 
+  // Add project ID header if available (for project-scoped requests)
+  if (typeof window !== 'undefined') {
+    const selectedProjectId = localStorage.getItem('selectedProjectId');
+    if (selectedProjectId && !reqHeaders.has("x-project-id")) {
+      reqHeaders.set("x-project-id", selectedProjectId);
+    }
+  }
+
   let body: BodyInit | undefined;
   if (json !== undefined) {
     reqHeaders.set("Content-Type", "application/json");

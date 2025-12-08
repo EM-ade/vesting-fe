@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { api } from "@/lib/api";
@@ -20,8 +20,21 @@ interface AvailableBalance {
     vaultAddress: string;
 }
 
+interface TokenOption {
+    symbol: string;
+    balance: number;
+    mint: string;
+}
+
+interface TreasuryStatus {
+    treasury: {
+        tokens?: TokenOption[];
+    };
+}
+
 export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawModalProps) {
-    const [withdrawType, setWithdrawType] = useState<"tokens" | "sol">("tokens");
+    const [selectedToken, setSelectedToken] = useState<string>(""); // mint address
+    const [availableTokens, setAvailableTokens] = useState<TokenOption[]>([]);
     const [amount, setAmount] = useState("");
     const [recipientAddress, setRecipientAddress] = useState("");
     const [note, setNote] = useState("");
@@ -30,12 +43,28 @@ export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawM
     const [error, setError] = useState<string | null>(null);
     const [balanceInfo, setBalanceInfo] = useState<AvailableBalance | null>(null);
 
-    // Load available balance when modal opens
-    useState(() => {
+    // Load available tokens when modal opens
+    useEffect(() => {
         if (open && projectId) {
+            loadAvailableTokens();
             loadAvailableBalance();
         }
-    });
+    }, [open, projectId]);
+
+    async function loadAvailableTokens() {
+        try {
+            const data = await api.get<TreasuryStatus>(`/treasury/status?projectId=${projectId}`);
+            if (data.treasury.tokens) {
+                setAvailableTokens(data.treasury.tokens);
+                // Auto-select first token (usually SOL)
+                if (data.treasury.tokens.length > 0 && !selectedToken) {
+                    setSelectedToken(data.treasury.tokens[0].mint);
+                }
+            }
+        } catch (err) {
+            console.error("Failed to load tokens:", err);
+        }
+    }
 
     async function loadAvailableBalance() {
         setBalanceLoading(true);
@@ -70,8 +99,11 @@ export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawM
         setError(null);
 
         try {
-            // Choose endpoint based on withdrawal type
-            const endpoint = withdrawType === "sol" 
+            const token = availableTokens.find(t => t.mint === selectedToken);
+            const isSOL = token?.symbol === 'SOL';
+            
+            // Choose endpoint based on token type
+            const endpoint = isSOL
                 ? `/treasury/withdraw-sol?projectId=${projectId}`
                 : `/treasury/withdraw?projectId=${projectId}`;
             
@@ -79,6 +111,7 @@ export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawM
                 amount: parseFloat(amount),
                 recipientAddress,
                 note,
+                tokenMint: isSOL ? undefined : selectedToken, // Only send tokenMint for SPL tokens
             });
 
             if (onSuccess) onSuccess();
@@ -101,44 +134,42 @@ export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawM
         }
     }
 
+    const selectedTokenData = availableTokens.find(t => t.mint === selectedToken);
+    const isSOL = selectedTokenData?.symbol === 'SOL';
+
     return (
         <Modal open={open} onClose={onClose} title="Withdraw from Vault">
             <div className="space-y-6">
-                {/* Withdrawal Type Selector */}
+                {/* Token Selector */}
                 <div>
-                    <label className="block text-sm text-white/60 mb-2">Withdrawal Type</label>
-                    <div className="flex gap-2">
-                        <button
-                            type="button"
-                            onClick={() => setWithdrawType("tokens")}
-                            className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-colors ${
-                                withdrawType === "tokens"
-                                    ? "bg-blue-600 text-white"
-                                    : "bg-slate-900 text-white/60 hover:bg-slate-800 border border-white/10"
-                            }`}
-                        >
-                            Tokens
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setWithdrawType("sol")}
-                            className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-colors ${
-                                withdrawType === "sol"
-                                    ? "bg-blue-600 text-white"
-                                    : "bg-slate-900 text-white/60 hover:bg-slate-800 border border-white/10"
-                            }`}
-                        >
-                            SOL (Gas Fees)
-                        </button>
-                    </div>
+                    <label className="block text-sm text-white/60 mb-2">Select Token</label>
+                    <select
+                        value={selectedToken}
+                        onChange={(e) => setSelectedToken(e.target.value)}
+                        className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-purple-500/50 focus:outline-none"
+                    >
+                        {availableTokens.length === 0 && (
+                            <option value="">Loading tokens...</option>
+                        )}
+                        {availableTokens.map((token) => (
+                            <option key={token.mint} value={token.mint}>
+                                {token.symbol} - {token.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })} available
+                            </option>
+                        ))}
+                    </select>
+                    {isSOL && (
+                        <p className="text-xs text-blue-400 mt-2">
+                            💡 Minimum 0.001 SOL must remain in vault for rent exemption (Solana requirement).
+                        </p>
+                    )}
                 </div>
 
-                {/* Balance Info */}
-                {withdrawType === "tokens" && balanceLoading ? (
+                {/* Balance Info - Show for project tokens only, not SOL */}
+                {!isSOL && balanceLoading ? (
                     <div className="flex items-center justify-center py-8">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
                     </div>
-                ) : withdrawType === "tokens" && balanceInfo ? (
+                ) : !isSOL && balanceInfo ? (
                     <div className="bg-slate-900 rounded-xl p-4 space-y-3">
                         <div className="flex justify-between text-sm">
                             <span className="text-slate-400">Total Balance</span>
@@ -154,18 +185,12 @@ export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawM
                             <span className="text-green-400 font-mono text-lg">{balanceInfo.available.toLocaleString()}</span>
                         </div>
                     </div>
-                ) : withdrawType === "sol" ? (
-                    <div className="bg-blue-900/20 border border-blue-500/20 rounded-xl p-4">
-                        <p className="text-sm text-blue-300">
-                            Withdraw SOL from your vault to recover gas fees. A small amount (~0.002 SOL) will be kept for rent exemption.
-                        </p>
-                    </div>
                 ) : null}
 
                 {/* Amount Input */}
                 <div>
                     <label className="block text-sm text-white/60 mb-2">
-                        Amount to Withdraw {withdrawType === "sol" ? "(SOL)" : "(Tokens)"}
+                        Amount to Withdraw ({selectedTokenData?.symbol || 'Token'})
                     </label>
                     <div className="relative">
                         <input
@@ -173,11 +198,12 @@ export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawM
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
                             className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-slate-600 focus:border-purple-500/50 focus:outline-none font-mono"
-                            placeholder={withdrawType === "sol" ? "0.000" : "0.00"}
-                            step={withdrawType === "sol" ? "0.001" : "0.01"}
+                            placeholder={isSOL ? "0.000" : "0.00"}
+                            step={isSOL ? "0.001" : "0.01"}
                         />
-                        {withdrawType === "tokens" && (
+                        {!isSOL && (
                             <button
+                                type="button"
                                 onClick={setMaxAmount}
                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-purple-400 hover:text-purple-300 font-medium"
                             >
@@ -185,7 +211,7 @@ export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawM
                             </button>
                         )}
                     </div>
-                    {withdrawType === "tokens" && balanceInfo && parseFloat(amount) > balanceInfo.available && (
+                    {!isSOL && balanceInfo && parseFloat(amount) > balanceInfo.available && (
                         <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" />
                             Amount exceeds available balance
@@ -236,7 +262,7 @@ export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawM
                     <Button
                         onClick={handleWithdraw}
                         loading={loading}
-                        disabled={!amount || !recipientAddress || (balanceInfo ? parseFloat(amount) > balanceInfo.available : false)}
+                        disabled={!amount || !recipientAddress || (!isSOL && balanceInfo ? parseFloat(amount) > balanceInfo.available : false)}
                         className="bg-purple-500 hover:bg-purple-600"
                     >
                         Withdraw Tokens
