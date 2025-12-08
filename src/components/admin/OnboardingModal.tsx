@@ -142,9 +142,12 @@ export function OnboardingModal() {
               </div>
             </div>
 
-            <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-lg">
+            <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-lg space-y-2">
               <p className="text-xs text-yellow-200">
-                ⚠️ Send at least <strong>0.05 SOL</strong> to this address.
+                ⚠️ Minimum: <strong>0.002 SOL</strong> to complete setup.
+              </p>
+              <p className="text-xs text-yellow-300/80">
+                💡 Recommended: <strong>0.01 SOL</strong> or more for gas fees to effectively setup everything (creating pools, processing claims, etc.)
               </p>
             </div>
 

@@ -37,6 +37,25 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Load cached data on mount for instant display
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedProjectId = localStorage.getItem('selectedProjectId');
+      const cachedProjectData = localStorage.getItem('cachedProject');
+      
+      if (savedProjectId && cachedProjectData) {
+        try {
+          const cachedProject = JSON.parse(cachedProjectData);
+          setCurrentProject(cachedProject);
+          setProjects([cachedProject]);
+          // Still loading in background, but show cached data immediately
+        } catch (e) {
+          console.error('Failed to parse cached project:', e);
+        }
+      }
+    }
+  }, []);
+
   const fetchProjects = useCallback(async () => {
     try {
       // Only fetch if wallet is connected
@@ -45,6 +64,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setCurrentProject(null);
         if (typeof window !== 'undefined') {
           localStorage.removeItem('selectedProjectId');
+          localStorage.removeItem('cachedProject');
         }
         return;
       }
@@ -68,15 +88,25 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const project = response.find(p => p.id === savedProjectId);
         if (project) {
           setCurrentProject(project);
+          // Cache for instant display on next load
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('cachedProject', JSON.stringify(project));
+          }
         } else {
            // Saved project not found, default to first
            setCurrentProject(response[0]);
-           if (typeof window !== 'undefined') localStorage.setItem('selectedProjectId', response[0].id);
+           if (typeof window !== 'undefined') {
+             localStorage.setItem('selectedProjectId', response[0].id);
+             localStorage.setItem('cachedProject', JSON.stringify(response[0]));
+           }
         }
       } else {
          // No saved project, default to first
          setCurrentProject(response[0]);
-         if (typeof window !== 'undefined') localStorage.setItem('selectedProjectId', response[0].id);
+         if (typeof window !== 'undefined') {
+           localStorage.setItem('selectedProjectId', response[0].id);
+           localStorage.setItem('cachedProject', JSON.stringify(response[0]));
+         }
       }
     } catch (error) {
       console.error('Failed to fetch projects:', error);
@@ -103,7 +133,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const project = projects.find(p => p.id === projectId);
     if (project) {
       setCurrentProject(project);
-      if (typeof window !== 'undefined') localStorage.setItem('selectedProjectId', projectId);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('selectedProjectId', projectId);
+        // Cache for instant display on next load
+        localStorage.setItem('cachedProject', JSON.stringify(project));
+      }
       // Force a reload to clear any stale state in other components if necessary
       // window.location.reload(); 
       // Better to let React Context handle updates, but API calls need to pick up new ID.
