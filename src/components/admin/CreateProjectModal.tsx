@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { api } from "@/lib/api";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useRouter } from "next/navigation";
+import { useProject } from "@/contexts/ProjectContext";
 
 type CreateProjectModalProps = {
   open: boolean;
@@ -15,6 +16,7 @@ type CreateProjectModalProps = {
 export function CreateProjectModal({ open, onClose }: CreateProjectModalProps) {
   const { publicKey } = useWallet();
   const router = useRouter();
+  const { refreshProjects, switchProject } = useProject();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -38,7 +40,13 @@ export function CreateProjectModal({ open, onClose }: CreateProjectModalProps) {
       });
 
       if (response.success) {
-        // Save selection and redirect
+        // Refresh projects list to include the new project
+        await refreshProjects();
+        
+        // Switch to the newly created project
+        switchProject(response.projectId);
+        
+        // Save selection
         if (typeof window !== 'undefined') {
           localStorage.setItem('selectedProjectId', response.projectId);
         }

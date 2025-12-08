@@ -27,9 +27,15 @@ export function useAdminAuth() {
       try {
         // Check if wallet is admin
         const projectId = localStorage.getItem('selectedProjectId');
-        const url = projectId 
-          ? `/config/check-admin?wallet=${publicKey.toBase58()}&projectId=${projectId}`
-          : `/config/check-admin?wallet=${publicKey.toBase58()}`;
+        
+        // If no project selected, allow access (user can create a project)
+        if (!projectId) {
+          setIsAdmin(true); // Allow access to create first project
+          setIsLoading(false);
+          return;
+        }
+        
+        const url = `/config/check-admin?wallet=${publicKey.toBase58()}&projectId=${projectId}`;
           
         const response = await api.get<{ success: boolean; isAdmin: boolean }>(url);
         
@@ -37,7 +43,7 @@ export function useAdminAuth() {
           setIsAdmin(true);
           setIsLoading(false);
         } else {
-          // Not admin, redirect
+          // Not admin for this project, redirect
           setIsAdmin(false);
           setIsLoading(false);
           router.push('/user/vesting');

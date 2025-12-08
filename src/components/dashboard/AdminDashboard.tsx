@@ -36,8 +36,16 @@ export function AdminDashboard() {
 
   if (!currentProject) {
     return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-4">
-        <div className="text-white text-lg">No project selected</div>
+      <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-6 text-center px-4">
+        <div className="space-y-3">
+          <div className="text-white text-2xl font-bold">Welcome to the Admin Dashboard!</div>
+          <div className="text-white/60 max-w-md">
+            You don't have any projects yet. Create your first project to start managing vesting pools and treasury.
+          </div>
+        </div>
+        <div className="text-sm text-white/40">
+          Use the project selector in the sidebar to create a new project
+        </div>
       </div>
     );
   }

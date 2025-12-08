@@ -1,7 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../lib/apiClient';
+import { useWallet } from '@solana/wallet-adapter-react';
 
 interface Project {
   id: string;
@@ -16,6 +17,7 @@ interface ProjectContextType {
   currentProject: Project | null;
   projects: Project[];
   switchProject: (projectId: string) => void;
+  refreshProjects: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -30,40 +32,72 @@ export const useProject = () => {
 };
 
 export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { publicKey } = useWallet();
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchProjects = async () => {
-      try {
-        const response = await apiClient.get<Project[]>('/projects');
-        setProjects(response || []);
-        
-        // Restore last selected project if available
-        const savedProjectId = typeof window !== 'undefined' ? localStorage.getItem('selectedProjectId') : null;
-        if (savedProjectId && response) {
-          const project = response.find(p => p.id === savedProjectId);
-          if (project) {
-            setCurrentProject(project);
-          } else if (response.length > 0) {
-             // Default to first
-             setCurrentProject(response[0]);
-             if (typeof window !== 'undefined') localStorage.setItem('selectedProjectId', response[0].id);
-          }
-        } else if (response && response.length > 0) {
+  const fetchProjects = useCallback(async () => {
+    try {
+      // Only fetch if wallet is connected
+      if (!publicKey) {
+        setProjects([]);
+        setCurrentProject(null);
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('selectedProjectId');
+        }
+        return;
+      }
+
+      const walletAddress = publicKey.toBase58();
+      const response = await apiClient.get<Project[]>(`/projects?wallet=${walletAddress}`);
+      setProjects(response || []);
+      
+      // If no projects available, clear saved selection
+      if (!response || response.length === 0) {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('selectedProjectId');
+        }
+        setCurrentProject(null);
+        return;
+      }
+      
+      // Restore last selected project if available
+      const savedProjectId = typeof window !== 'undefined' ? localStorage.getItem('selectedProjectId') : null;
+      if (savedProjectId && response) {
+        const project = response.find(p => p.id === savedProjectId);
+        if (project) {
+          setCurrentProject(project);
+        } else {
+           // Saved project not found, default to first
            setCurrentProject(response[0]);
            if (typeof window !== 'undefined') localStorage.setItem('selectedProjectId', response[0].id);
         }
-      } catch (error) {
-        console.error('Failed to fetch projects:', error);
-      } finally {
-        setIsLoading(false);
+      } else {
+         // No saved project, default to first
+         setCurrentProject(response[0]);
+         if (typeof window !== 'undefined') localStorage.setItem('selectedProjectId', response[0].id);
       }
+    } catch (error) {
+      console.error('Failed to fetch projects:', error);
+    }
+  }, [publicKey]);
+
+  useEffect(() => {
+    const loadProjects = async () => {
+      setIsLoading(true);
+      await fetchProjects();
+      setIsLoading(false);
     };
     
-    fetchProjects();
-  }, []);
+    loadProjects();
+  }, [fetchProjects, publicKey]);
+
+  const refreshProjects = async () => {
+    setIsLoading(true);
+    await fetchProjects();
+    setIsLoading(false);
+  };
 
   const switchProject = (projectId: string) => {
     const project = projects.find(p => p.id === projectId);
@@ -80,7 +114,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     <ProjectContext.Provider value={{ 
       currentProject, 
       projects, 
-      switchProject, 
+      switchProject,
+      refreshProjects, 
       isLoading 
     }}>
       {children}

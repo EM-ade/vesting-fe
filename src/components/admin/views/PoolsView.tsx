@@ -165,7 +165,7 @@ export function PoolsView() {
             )}
           </div>
 
-          <Button onClick={() => setCreateModalOpen(true)} className="bg-white text-black hover:bg-slate-200 font-medium text-sm flex items-center gap-2 px-4 rounded-lg">
+          <Button onClick={() => setCreateModalOpen(true)} className="bg-blue-600 text-white hover:bg-blue-700 font-medium text-sm flex items-center gap-2 px-4 rounded-lg">
             <Plus className="w-4 h-4" /> Create Pool
           </Button>
         </div>
