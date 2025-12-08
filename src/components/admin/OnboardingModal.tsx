@@ -35,10 +35,10 @@ export function OnboardingModal() {
           setProjectDetails(details);
           
           // Trigger modal if vault has no SOL or no mint address
-          if (details.vault_balance_sol < 0.01 || !details.mint_address) {
+          if (details.vault_balance_sol < 0.002 || !details.mint_address) {
             setIsOpen(true);
             // Jump to appropriate step
-            if (details.vault_balance_sol < 0.01) setStep(1);
+            if (details.vault_balance_sol < 0.002) setStep(1);
             else if (!details.mint_address) setStep(2);
           }
         } catch (err) {
@@ -163,7 +163,7 @@ export function OnboardingModal() {
               </div>
               <Button 
                 size="sm" 
-                disabled={(projectDetails?.vault_balance_sol || 0) < 0.01}
+                disabled={(projectDetails?.vault_balance_sol || 0) < 0.002}
                 onClick={() => setStep(2)}
               >
                 Next <ArrowRight className="w-4 h-4 ml-1" />
