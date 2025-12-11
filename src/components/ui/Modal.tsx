@@ -4,6 +4,7 @@ import { ReactNode, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
+import { X } from "lucide-react";
 
 type ModalProps = {
   open: boolean;
@@ -43,8 +44,17 @@ export function Modal({ open, title, description, children, footer, onClose, wid
           widthClassName ?? "max-w-xl"
         )}
       >
+        {/* X Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 rounded-lg hover:bg-white/10 transition-colors text-white/60 hover:text-white z-10"
+          aria-label="Close"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
         {(title || description) && (
-          <header className="mb-4 space-y-1">
+          <header className="mb-4 space-y-1 pr-8">
             {title && <h2 className="text-xl font-semibold text-white">{title}</h2>}
             {description && <p className="text-sm text-white/60">{description}</p>}
             <div className="panel-divider" />
@@ -53,14 +63,8 @@ export function Modal({ open, title, description, children, footer, onClose, wid
 
         <div className="space-y-4 text-sm text-white/80">{children}</div>
 
-        {footer ? (
+        {footer && (
           <footer className="mt-6 flex flex-wrap justify-end gap-2">{footer}</footer>
-        ) : (
-          <footer className="mt-6 flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              Close
-            </Button>
-          </footer>
         )}
       </div>
     </div>,

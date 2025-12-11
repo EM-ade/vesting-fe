@@ -47,7 +47,6 @@ export function TreasuryWidget() {
   const [treasuryStatus, setTreasuryStatus] = useState<TreasuryStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTokenIndex, setActiveTokenIndex] = useState(0);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawRecipient, setWithdrawRecipient] = useState("");
@@ -60,15 +59,15 @@ export function TreasuryWidget() {
   const tokens = treasuryStatus?.treasury.tokens && treasuryStatus.treasury.tokens.length > 0
     ? treasuryStatus.treasury.tokens
     : [
-        {
-          symbol: currentProject?.symbol || "Token",
-          balance: treasuryStatus?.treasury.balance || 0,
-          mint: treasuryStatus?.treasury.tokenMint || ""
-        }
-      ];
+      {
+        symbol: currentProject?.symbol || "Token",
+        balance: treasuryStatus?.treasury.balance || 0,
+        mint: treasuryStatus?.treasury.tokenMint || ""
+      }
+    ];
 
-  const activeToken = tokens[activeTokenIndex] || tokens[0] || { symbol: 'N/A', balance: 0, mint: '' };
-  
+  const activeToken = tokens[0] || { symbol: 'N/A', balance: 0, mint: '' };
+
   // Check if currently selected token for withdrawal is SOL
   const selectedWithdrawToken = tokens.find(t => t.mint === withdrawTokenMint);
   const isSOLWithdraw = selectedWithdrawToken?.symbol === 'SOL';
@@ -145,7 +144,7 @@ export function TreasuryWidget() {
     try {
       // Choose endpoint based on token type
       const endpoint = isSOLWithdraw ? "/treasury/withdraw-sol" : "/treasury/withdraw";
-      
+
       const response = await api.post<{ success: boolean; signature: string }>(endpoint, {
         amount: parseFloat(withdrawAmount),
         recipientAddress: withdrawRecipient,
@@ -218,92 +217,75 @@ export function TreasuryWidget() {
       </div>
 
       <div className="p-6 space-y-6 flex-1">
-        {/* Main Balance */}
-        <div className="space-y-2">
+        {/* Assets List */}
+        <div className="space-y-3">
           <div className="flex justify-between items-center">
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Treasury Token Available Balance</p>
-          </div>
-          <div className="flex items-end gap-3">
-            <span className="text-3xl font-bold text-white tracking-tight">{formatTokenAmount(activeToken?.balance || 0, true, activeToken?.symbol)}</span>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Vault Assets</p>
+            <div className="flex items-center gap-2 group cursor-pointer" onClick={copyAddress}>
+              <code className="px-2 py-1 bg-slate-900 border border-white/10 rounded text-xs font-mono text-slate-400 group-hover:text-slate-300 group-hover:border-white/20 transition-colors">
+                {treasury.address.slice(0, 4)}...{treasury.address.slice(-4)}
+              </code>
+              <Copy className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 transition-colors" />
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 mt-2 group cursor-pointer" onClick={copyAddress}>
-            <code className="px-2 py-1 bg-slate-900 border border-white/10 rounded text-xs font-mono text-slate-400 group-hover:text-slate-300 group-hover:border-white/20 transition-colors">
-              {treasury.address}
-            </code>
-            <Copy className="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 transition-colors" />
-          </div>
-        </div>
-
-        {/* All Tokens List */}
-        {tokens.length > 1 && (
           <div className="space-y-2">
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">All Tokens</p>
-            <div className="space-y-1">
-              {tokens.map((token, idx) => (
-                <div
-                  key={token.mint}
-                  className={`flex justify-between items-center p-2 rounded-lg border transition-colors cursor-pointer ${activeTokenIndex === idx
-                    ? "bg-purple-500/10 border-purple-500/30"
-                    : "bg-slate-900/50 border-white/5 hover:border-white/10"
-                    }`}
-                  onClick={() => setActiveTokenIndex(idx)}
-                >
-                  <span className="text-xs font-medium text-slate-300">{token.symbol}</span>
-                  <span className="text-xs font-mono text-slate-400">{formatTokenAmount(token.balance)}</span>
+            {tokens.map((token) => (
+              <div key={token.mint} className="bg-white/[0.02] border border-white/5 rounded-lg p-3 flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 font-bold text-xs">
+                    {token.symbol[0]}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-white">{token.symbol}</p>
+                    <p className="text-[10px] text-slate-500 font-mono">{token.mint.slice(0, 4)}...{token.mint.slice(-4)}</p>
+                  </div>
                 </div>
-              ))}
-            </div>
+                <div className="text-right">
+                  <p className="text-sm font-mono text-white font-medium">
+                    {token.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
+                  </p>
+                  <p className="text-[10px] text-slate-500">Total Balance</p>
+                </div>
+              </div>
+            ))}
           </div>
-        )}
+        </div>
 
-        {/* Stats Grid */}
+        {/* Allocation Stats */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="p-3 bg-white/[0.02] border border-white/5 rounded-lg">
-            <p className="text-xs text-slate-500 mb-1">Total Allocated</p>
-            <p className="text-sm font-mono text-slate-200">{formatTokenAmount(allocations.totalAllocated, false)}</p>
+          <div className="p-3 bg-purple-500/5 border border-purple-500/10 rounded-lg">
+            <p className="text-xs text-purple-300/80 mb-1">Total Allocated</p>
+            <p className="text-sm font-mono text-white">{formatTokenAmount(allocations.totalAllocated, false)}</p>
           </div>
-          <div className="p-3 bg-white/[0.02] border border-white/5 rounded-lg">
-            <p className="text-xs text-slate-500 mb-1">Total Claimed</p>
-            <p className="text-sm font-mono text-slate-200">{formatTokenAmount(allocations.totalClaimed, false)}</p>
+          <div className="p-3 bg-green-500/5 border border-green-500/10 rounded-lg">
+            <p className="text-xs text-green-300/80 mb-1">Total Claimed</p>
+            <p className="text-sm font-mono text-white">{formatTokenAmount(allocations.totalClaimed, false)}</p>
           </div>
         </div>
 
-        {/* Locked/Available for Withdrawal */}
+        {/* Locked/Available Breakdown (if available) */}
         {balanceInfo && (
-          <div className="p-3 bg-purple-500/5 border border-purple-500/20 rounded-lg space-y-2">
-            <div className="flex justify-between text-xs">
-              <span className="text-slate-400">Locked in Pools</span>
-              <span className="text-yellow-400 font-mono">{formatTokenAmount(balanceInfo.lockedInPools)}</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-white font-medium">Available to Withdraw</span>
-              <span className="text-green-400 font-mono font-medium">{formatTokenAmount(balanceInfo.available)}</span>
+          <div className="p-4 bg-slate-900/50 border border-white/5 rounded-lg space-y-3">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Vesting Token Breakdown</p>
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">Locked in Pools</span>
+                <span className="text-yellow-400 font-mono">{formatTokenAmount(balanceInfo.lockedInPools)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">Available to Withdraw</span>
+                <span className="text-green-400 font-mono font-medium">{formatTokenAmount(balanceInfo.available)}</span>
+              </div>
+              <div className="h-px bg-white/5 my-2" />
+              <div className="flex justify-between text-sm">
+                <span className="text-white font-medium">Total Balance</span>
+                <span className="text-white font-mono">{formatTokenAmount(balanceInfo.totalBalance)}</span>
+              </div>
             </div>
           </div>
         )}
-
-        {/* Buffer Progress */}
-        <div className="space-y-2">
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-500">Treasury Buffer</span>
-            <span className={status.health === "critical" ? "text-red-400" : "text-slate-300"}>{bufferPercentage}%</span>
-          </div>
-          <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${status.health === "healthy"
-                ? "bg-green-500"
-                : status.health === "warning"
-                  ? "bg-yellow-500"
-                  : "bg-red-500"
-                }`}
-              style={{ width: `${Math.min(bufferPercentage, 100)}%` }}
-            />
-          </div>
-          <p className="text-[10px] text-slate-600">
-            Required: {formatTokenAmount(allocations.remainingNeeded, true, activeToken?.symbol)} • Available: {formatTokenAmount(status.buffer, true, activeToken?.symbol)}
-          </p>
-        </div>
 
         {/* Recommendations */}
         {recommendations.length > 0 && (

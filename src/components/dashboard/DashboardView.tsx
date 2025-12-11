@@ -117,14 +117,14 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
       console.log(`Loading pool data for project ${currentProject?.name}...`);
       const pools = await api.get<Array<Record<string, unknown>>>("/pools");
       console.log("Pools loaded:", pools);
-      
+
       // Store all pools for selector
       setAvailablePools(pools || []);
-      
+
       if (pools && pools.length > 0) {
         const activePool = pools.find((p: Record<string, unknown>) => p.isActive) || pools[0];
         console.log("Active pool:", activePool);
-        
+
         // Store active pool ID for editing
         setActivePoolId(String(activePool.id));
         setSelectedPoolId(String(activePool.id));
@@ -132,7 +132,7 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
         setPoolState(activePool.state as string || "active");
         setPoolName(String(activePool.name || 'Vesting Pool'));
         setPoolTotalAmount(Number(activePool.totalAmount || 0));
-        
+
         // Update metrics with real pool data
         setMetrics((prev) => ({
           ...prev,
@@ -143,14 +143,14 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
         try {
           const poolDetails = await api.get<Record<string, unknown>>(`/pools/${String(activePool.id)}`);
           console.log("Pool details:", poolDetails);
-          
+
           const vestingMode = activePool.vestingMode as string;
-          
+
           if (vestingMode === 'manual') {
             // For manual pools, load allocations as rules
             const vestings = await api.get<Array<Record<string, unknown>>>(`/pools/${activePool.id}/activity`);
             console.log("Manual pool vestings:", vestings);
-            
+
             if (vestings && vestings.length > 0) {
               // Store allocations for editing
               setCurrentAllocations(vestings.map((v: Record<string, unknown>) => ({
@@ -168,7 +168,7 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
                 allocationValue: Number(vesting.token_amount || 0),
                 enabled: Boolean(vesting.is_active),
               }));
-              
+
               setRules(manualRules);
               console.log("Loaded manual allocations as rules:", manualRules);
             }
@@ -183,7 +183,7 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
               allocationValue: Number(req.allocationValue || req.pool_percent || 0),
               enabled: true,
             }));
-            
+
             setRules(loadedRules);
             console.log("Loaded rules from pool:", loadedRules);
           }
@@ -195,10 +195,10 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
         try {
           const vestings = await api.get<Array<Record<string, unknown>>>(`/pools/${activePool.id}/activity`);
           console.log("Vestings loaded:", vestings);
-          
+
           if (vestings && vestings.length > 0) {
             const totalAllocated = vestings.reduce((sum: number, v: Record<string, unknown>) => sum + Number(v.token_amount), 0);
-            
+
             setMetrics((prev) => ({
               ...prev,
               eligibleWallets: vestings.length,
@@ -234,26 +234,26 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
   async function handlePoolChange(poolId: string) {
     setSelectedPoolId(poolId);
     setActivePoolId(poolId);
-    
+
     // Find selected pool to get vesting mode and state
     const selectedPool = availablePools.find(p => p.id === poolId);
     if (selectedPool) {
       setPoolVestingMode(selectedPool.vestingMode as "snapshot" | "dynamic" | "manual");
       setPoolState(selectedPool.state as string || "active");
     }
-    
+
     // Reload data for selected pool
     try {
       const poolDetails = await api.get<Record<string, unknown>>(`/pools/${poolId}`);
-      
+
       // Update metrics
       setMetrics((prev) => ({
         ...prev,
         poolBalance: (poolDetails.totalAmount as number) || prev.poolBalance,
       }));
-      
+
       const vestingMode = selectedPool?.vestingMode as string;
-      
+
       // Load rules based on vesting mode
       if (vestingMode === 'manual') {
         // For manual pools, load allocations as rules
@@ -287,11 +287,11 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
       } else {
         setRules([]);
       }
-      
+
       // Load Streamflow status
       const status = await api.get<Record<string, unknown>>(`/pools/${poolId}/streamflow-status`);
       setStreamflowStatus(status);
-      
+
       // Load vestings count
       const vestings = await api.get<Array<Record<string, unknown>>>(`/pools/${poolId}/activity`);
       if (vestings && vestings.length > 0) {
@@ -357,7 +357,7 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
     try {
       await api.post(`/pools/${selectedPoolId}/sync`, {});
       alert("✅ Pool sync completed! Check the logs for details.");
-      
+
       // Reload pool data
       await loadActivePoolData();
       await loadActivityLogs();
@@ -430,18 +430,18 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
 
   return (
     <div className="flex flex-col gap-8">
-      <OnboardingModal />
+      <OnboardingModal autoShow={true} />
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Pool Balance"
-          value={Boolean(streamflowStatus?.deployed) && streamflowStatus?.depositedAmount 
+          value={Boolean(streamflowStatus?.deployed) && streamflowStatus?.depositedAmount
             ? formatTokenAmount(Number(streamflowStatus.depositedAmount))
             : "N/A"}
           helper={streamflowStatus?.deployed ? "From Streamflow" : "Total pool amount"}
         />
         <StatCard
           label="Vested Amount"
-          value={Boolean(streamflowStatus?.deployed) && streamflowStatus?.vestedAmount 
+          value={Boolean(streamflowStatus?.deployed) && streamflowStatus?.vestedAmount
             ? formatTokenAmount(Number(streamflowStatus.vestedAmount))
             : "N/A"}
           helper={streamflowStatus?.deployed ? `${Number(streamflowStatus?.vestedPercentage || 0).toFixed(1)}% vested` : "Deploy to Streamflow"}
@@ -492,7 +492,7 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
               );
             })()}
           </div>
-          
+
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
             {availablePools.length > 1 && (
               <div className="w-full sm:w-auto sm:min-w-[200px] sm:max-w-[300px]">
@@ -504,7 +504,7 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
                 >
                   {availablePools.map((pool) => (
                     <option key={String(pool.id)} value={String(pool.id)}>
-                      {String(pool.name)} 
+                      {String(pool.name)}
                       {pool.state === 'active' && '(Active)'}
                       {pool.state === 'paused' && '(Paused)'}
                       {pool.state === 'cancelled' && '(Cancelled)'}
@@ -514,24 +514,24 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
               </div>
             )}
             <div className="flex flex-wrap items-center gap-4 text-sm">
-            <div className="text-right">
-              <p className="text-white/60 text-xs">Total Wallets</p>
-              <p className="font-semibold text-white">{summary?.totalWallets ?? "--"}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-white/60 text-xs">Total Allocated</p>
-              <p className="font-semibold text-white">
-                {Boolean(streamflowStatus?.deployed) && streamflowStatus?.depositedAmount 
-                  ? formatTokenAmount(Number(streamflowStatus.depositedAmount))
-                  : summary ? formatTokenAmount(summary.totalAllocated) : "--"}
-              </p>
-            </div>
-            {Boolean(streamflowStatus?.deployed) && (
               <div className="text-right">
-                <p className="text-white/60 text-xs">Streamflow Pool</p>
-                <p className="font-semibold text-green-400 text-xs">{String(streamflowStatus?.streamflowId || '').slice(0, 8)}...</p>
+                <p className="text-white/60 text-xs">Total Wallets</p>
+                <p className="font-semibold text-white">{summary?.totalWallets ?? "--"}</p>
               </div>
-            )}
+              <div className="text-right">
+                <p className="text-white/60 text-xs">Total Allocated</p>
+                <p className="font-semibold text-white">
+                  {Boolean(streamflowStatus?.deployed) && streamflowStatus?.depositedAmount
+                    ? formatTokenAmount(Number(streamflowStatus.depositedAmount))
+                    : summary ? formatTokenAmount(summary.totalAllocated) : "--"}
+                </p>
+              </div>
+              {Boolean(streamflowStatus?.deployed) && (
+                <div className="text-right">
+                  <p className="text-white/60 text-xs">Streamflow Pool</p>
+                  <p className="font-semibold text-green-400 text-xs">{String(streamflowStatus?.streamflowId || '').slice(0, 8)}...</p>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -543,14 +543,14 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
                 {poolVestingMode === 'manual' ? 'No Allocations' : 'No Rules Configured'}
               </p>
               <p className="text-sm text-white/60 mb-4">
-                {poolVestingMode === 'manual' 
-                  ? 'No wallet allocations found for this manual pool' 
+                {poolVestingMode === 'manual'
+                  ? 'No wallet allocations found for this manual pool'
                   : 'Create a vesting pool to add allocation rules'}
               </p>
               {poolVestingMode === 'dynamic' && (
-                <Button 
-                  variant="secondary" 
-                  size="sm" 
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => setAddRuleModalOpen(true)}
                 >
                   + Add First Rule
@@ -561,9 +561,9 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
             <>
               <div className="flex justify-end gap-2">
                 {poolVestingMode === 'manual' && (
-                  <Button 
-                    variant="secondary" 
-                    size="sm" 
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => setEditAllocationsModalOpen(true)}
                   >
                     ✏️ Edit Allocations
@@ -571,18 +571,18 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
                 )}
                 {poolVestingMode === 'dynamic' && (
                   <>
-                    <Button 
-                      variant="default" 
-                      size="sm" 
+                    <Button
+                      variant="default"
+                      size="sm"
                       onClick={syncDynamicPool}
                       loading={syncLoading}
                       disabled={syncLoading}
                     >
                       🔄 Sync Now
                     </Button>
-                    <Button 
-                      variant="secondary" 
-                      size="sm" 
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => setAddRuleModalOpen(true)}
                     >
                       + Add New Rule
@@ -590,7 +590,7 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
                   </>
                 )}
               </div>
-              
+
               <div className="overflow-x-auto -mx-6 px-6 scrollbar-thin scrollbar-thumb-[var(--accent)] scrollbar-track-transparent">
                 <div className="min-w-[1200px] max-h-[400px] overflow-y-auto rounded-2xl border border-[var(--border)]">
                   <RuleTable rules={rules} onEdit={handleEdit} onToggle={toggleRule} />
@@ -713,7 +713,7 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
           }}
         />
       )}
-      
+
       {activePoolId && (
         <AdminPoolManager
           poolId={activePoolId}

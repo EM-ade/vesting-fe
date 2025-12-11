@@ -11,6 +11,7 @@ interface Project {
   mint_address?: string;
   logo_url?: string;
   is_active: boolean;
+  vault_public_key?: string;
 }
 
 interface ProjectContextType {
@@ -42,7 +43,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (typeof window !== 'undefined') {
       const savedProjectId = localStorage.getItem('selectedProjectId');
       const cachedProjectData = localStorage.getItem('cachedProject');
-      
+
       if (savedProjectId && cachedProjectData) {
         try {
           const cachedProject = JSON.parse(cachedProjectData);
@@ -72,7 +73,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const walletAddress = publicKey.toBase58();
       const response = await apiClient.get<Project[]>(`/projects?wallet=${walletAddress}`);
       setProjects(response || []);
-      
+
       // If no projects available, clear saved selection
       if (!response || response.length === 0) {
         if (typeof window !== 'undefined') {
@@ -81,7 +82,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setCurrentProject(null);
         return;
       }
-      
+
       // Restore last selected project if available
       const savedProjectId = typeof window !== 'undefined' ? localStorage.getItem('selectedProjectId') : null;
       if (savedProjectId && response) {
@@ -93,20 +94,20 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
             localStorage.setItem('cachedProject', JSON.stringify(project));
           }
         } else {
-           // Saved project not found, default to first
-           setCurrentProject(response[0]);
-           if (typeof window !== 'undefined') {
-             localStorage.setItem('selectedProjectId', response[0].id);
-             localStorage.setItem('cachedProject', JSON.stringify(response[0]));
-           }
+          // Saved project not found, default to first
+          setCurrentProject(response[0]);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('selectedProjectId', response[0].id);
+            localStorage.setItem('cachedProject', JSON.stringify(response[0]));
+          }
         }
       } else {
-         // No saved project, default to first
-         setCurrentProject(response[0]);
-         if (typeof window !== 'undefined') {
-           localStorage.setItem('selectedProjectId', response[0].id);
-           localStorage.setItem('cachedProject', JSON.stringify(response[0]));
-         }
+        // No saved project, default to first
+        setCurrentProject(response[0]);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('selectedProjectId', response[0].id);
+          localStorage.setItem('cachedProject', JSON.stringify(response[0]));
+        }
       }
     } catch (error) {
       console.error('Failed to fetch projects:', error);
@@ -119,7 +120,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       await fetchProjects();
       setIsLoading(false);
     };
-    
+
     loadProjects();
   }, [fetchProjects, publicKey]);
 
@@ -145,12 +146,12 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   return (
-    <ProjectContext.Provider value={{ 
-      currentProject, 
-      projects, 
+    <ProjectContext.Provider value={{
+      currentProject,
+      projects,
       switchProject,
-      refreshProjects, 
-      isLoading 
+      refreshProjects,
+      isLoading
     }}>
       {children}
     </ProjectContext.Provider>

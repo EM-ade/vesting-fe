@@ -89,7 +89,7 @@ const DEFAULT_RULE: RuleForm = {
 export function CreateVestingModal({ open, onClose, mode, onModeChange, onSuccess }: CreateVestingModalProps) {
   const { currentProject } = useProject();
   const { connection } = useConnection();
-  const { publicKey } = useWallet();
+  const { publicKey, sendTransaction } = useWallet();
   const [currentMode, setCurrentMode] = useState<VestingMode>(mode);
   const [poolName, setPoolName] = useState("");
   const [amount, setAmount] = useState("");
@@ -116,94 +116,64 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
   const [availableTokens, setAvailableTokens] = useState<TokenInfo[]>([]);
   const [loadingTokens, setLoadingTokens] = useState(false);
 
+  // Fetch tokens from the CONNECTED WALLET
   const fetchWalletTokens = async () => {
     if (!publicKey) return;
 
     setLoadingTokens(true);
     try {
-      const tokens: TokenInfo[] = [];
+      const { value: accounts } = await connection.getParsedTokenAccountsByOwner(publicKey, {
+        programId: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+      });
 
-      // 1. Fetch SOL Balance
+      const tokens: TokenInfo[] = accounts.map((account) => {
+        const info = account.account.data.parsed.info;
+        return {
+          mint: info.mint,
+          symbol: "Unknown", // We'll try to match known tokens
+          decimals: info.tokenAmount.decimals,
+          balance: info.tokenAmount.uiAmount,
+        };
+      }).filter(t => t.balance && t.balance > 0);
+
+      // Add SOL balance
       const solBalance = await connection.getBalance(publicKey);
       if (solBalance > 0) {
-        tokens.push({
-          symbol: "SOL",
+        tokens.unshift({
           mint: "So11111111111111111111111111111111111111112",
+          symbol: "SOL",
           decimals: 9,
           balance: solBalance / LAMPORTS_PER_SOL,
-          isNative: true
+          isNative: true,
         });
       }
 
-      // 2. Fetch SPL Tokens
-      const tokenAccounts = await connection.getParsedTokenAccountsByOwner(publicKey, {
-        programId: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA") // TOKEN_PROGRAM_ID
-      });
-
-      tokenAccounts.value.forEach((account) => {
-        const info = account.account.data.parsed.info;
-        const mint = info.mint;
-        const amount = info.tokenAmount.uiAmount;
-        const decimals = info.tokenAmount.decimals;
-
-        if (amount > 0) {
-          const knownToken = KNOWN_TOKENS[mint];
-          tokens.push({
-            symbol: knownToken?.symbol || "Unknown",
-            mint,
-            decimals,
-            balance: amount,
-            isNative: false
-          });
+      // Enrich with known symbols
+      const enrichedTokens = tokens.map(t => {
+        const known = KNOWN_TOKENS[t.mint];
+        if (known) {
+          return { ...t, symbol: known.symbol };
         }
+        // Try to match with project token
+        if (currentProject?.mint_address && t.mint === currentProject.mint_address) {
+          return { ...t, symbol: currentProject.token_symbol || "Project Token" };
+        }
+        return t;
       });
 
       // Sort: Known tokens first, then by balance
-      tokens.sort((a, b) => {
-        const aKnown = KNOWN_TOKENS[a.mint] ? 1 : 0;
-        const bKnown = KNOWN_TOKENS[b.mint] ? 1 : 0;
+      enrichedTokens.sort((a, b) => {
+        const aKnown = KNOWN_TOKENS[a.mint] || (currentProject?.mint_address === a.mint) ? 1 : 0;
+        const bKnown = KNOWN_TOKENS[b.mint] || (currentProject?.mint_address === b.mint) ? 1 : 0;
         if (aKnown !== bKnown) return bKnown - aKnown;
         return (b.balance || 0) - (a.balance || 0);
       });
 
-      setAvailableTokens(tokens);
+      setAvailableTokens(enrichedTokens);
 
-      // Default select first token (usually SOL or USDC if available)
-      if (tokens.length > 0 && !selectedToken) {
-        // Try to select project token if available
-        let defaultToken = tokens[0];
-
-        if (currentProject?.mint_address) {
-          const projectToken = tokens.find(t => t.mint === currentProject.mint_address);
-          if (projectToken) {
-            defaultToken = projectToken;
-          } else {
-            // If project token not found in wallet (balance 0), we should still allow selecting it if we know it exists?
-            // Or maybe just fallback to the first token.
-            // User said "dropdown should pull all the tokens available in the wallet".
-            // But they also said "GARG Token shouldnt be GARG token it should be gotten from the mint token set".
-
-            // If the wallet doesn't have the project token, maybe we should insert it with 0 balance?
-            // But fetchWalletTokens logic currently only pushes if amount > 0 for SPL tokens.
-            // Let's verify if we want to show 0 balance tokens.
-
-            // The user wants to *create* a pool. If they have 0 balance, they can't fund it immediately?
-            // But maybe they will fund it later.
-
-            // For now, let's try to find it in the wallet. If not found, we could forcefully add it if we have metadata.
-            // But we don't have metadata (decimals) if it's not in the wallet (unless we fetch mint info).
-
-            // Let's stick to finding in wallet for now.
-            const garg = tokens.find(t => t.symbol === "GARG"); // Fallback to GARG symbol check if mint doesn't match (legacy)
-            if (garg) defaultToken = garg;
-          }
-        } else {
-          // Legacy fallback
-          const garg = tokens.find(t => t.symbol === "GARG");
-          if (garg) defaultToken = garg;
-        }
-
-        setSelectedToken(defaultToken);
+      // Default select first token
+      if (enrichedTokens.length > 0 && !selectedToken) {
+        setSelectedToken(enrichedTokens[0]);
       }
     } catch (err) {
       console.error("Failed to fetch wallet tokens:", err);
@@ -216,7 +186,7 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
     if (open && publicKey) {
       fetchWalletTokens();
     }
-  }, [open, publicKey]);
+  }, [open, publicKey, connection]); // Added connection dependency
 
   useEffect(() => {
     if (!open) return;
@@ -301,6 +271,17 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
   }
 
   async function handleCreate() {
+    console.log("[CreateVestingModal] Debug:", {
+      publicKey: publicKey?.toBase58(),
+      currentProject,
+      vaultKey: currentProject?.vault_public_key
+    });
+
+    if (!publicKey || !currentProject?.vault_public_key) {
+      setError("Wallet not connected or project vault not found");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -324,6 +305,74 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
       if (currentMode === "manual" && (!manualAllocations.length)) throw new Error("Add at least one wallet");
       if (currentMode !== "manual" && !payloadRules.length) throw new Error("Add at least one rule");
 
+      // 1. Transfer tokens from User Wallet to Project Vault (Treasury)
+      // Unless skipping Streamflow (testing mode)
+      if (!skipStreamflow && selectedToken) {
+        // Import dynamically to avoid SSR issues
+        const { Transaction, SystemProgram } = await import("@solana/web3.js");
+        const { createTransferInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction } = await import("@solana/spl-token");
+
+        const vaultPubkey = new PublicKey(currentProject.vault_public_key);
+        const amountBaseUnits = Math.floor(Number(amount) * Math.pow(10, selectedToken.decimals));
+
+        const transaction = new Transaction();
+
+        if (selectedToken.isNative) {
+          // SOL Transfer
+          transaction.add(
+            SystemProgram.transfer({
+              fromPubkey: publicKey,
+              toPubkey: vaultPubkey,
+              lamports: amountBaseUnits,
+            })
+          );
+        } else {
+          // SPL Token Transfer
+          const mintPubkey = new PublicKey(selectedToken.mint);
+          const fromAta = await getAssociatedTokenAddress(mintPubkey, publicKey);
+          const toAta = await getAssociatedTokenAddress(mintPubkey, vaultPubkey, true); // Allow owner off-curve (PDA) if needed, though vault is usually a keypair
+
+          // Check if destination ATA exists (it might not if this is the first transfer)
+          const toAccountInfo = await connection.getAccountInfo(toAta);
+
+          if (!toAccountInfo) {
+            // Create ATA for the vault, paid by the user
+            transaction.add(
+              createAssociatedTokenAccountInstruction(
+                publicKey, // payer
+                toAta,
+                vaultPubkey, // owner
+                mintPubkey
+              )
+            );
+          }
+
+          transaction.add(
+            createTransferInstruction(
+              fromAta,
+              toAta,
+              publicKey,
+              amountBaseUnits
+            )
+          );
+        }
+
+        // Send transaction
+        const signature = await sendTransaction(transaction, connection);
+
+        // Wait for confirmation
+        const latestBlockhash = await connection.getLatestBlockhash();
+        await connection.confirmTransaction({
+          signature,
+          blockhash: latestBlockhash.blockhash,
+          lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+        });
+
+        console.log("Funding transaction confirmed:", signature);
+      }
+
+
+
       await api.post("/pools", {
         name: poolName || `Vesting - ${new Date().toLocaleDateString()}`,
         total_pool_amount: Number(amount),
@@ -340,7 +389,6 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
           allocationValue: a.allocationValue
         })) : undefined,
         skipStreamflow,
-        // Pass selected token details to backend (backend needs to support this update)
         token_mint: selectedToken?.mint,
       });
 
@@ -411,9 +459,20 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
                 {/* Custom Dropdown for Token Selection */}
                 <div
                   className="p-4 bg-slate-900 rounded-xl border border-white/10 flex items-center justify-between cursor-pointer hover:border-white/20 transition-all"
-                  onClick={() => setIsTokenDropdownOpen(!isTokenDropdownOpen)}
+                  onClick={() => !loadingTokens && setIsTokenDropdownOpen(!isTokenDropdownOpen)}
                 >
-                  {selectedToken ? (
+                  {loadingTokens ? (
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-slate-800 animate-pulse" />
+                        <div className="space-y-2">
+                          <div className="h-4 w-24 bg-slate-800 rounded animate-pulse" />
+                          <div className="h-3 w-32 bg-slate-800 rounded animate-pulse" />
+                        </div>
+                      </div>
+                      <ChevronDown className="w-3 h-3 text-slate-500" />
+                    </div>
+                  ) : selectedToken ? (
                     <>
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-purple-600/20 flex items-center justify-center text-purple-400 font-bold">
@@ -428,17 +487,19 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-xs text-slate-500">Decimals</div>
-                        <div className="text-sm font-mono text-white">{selectedToken.decimals}</div>
+                        <div className="text-xs text-slate-500">Balance</div>
+                        <div className="text-sm font-mono text-white">{selectedToken.balance?.toFixed(2) || '0'}</div>
                       </div>
                     </>
                   ) : (
                     <div className="flex items-center justify-between w-full">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-slate-800 animate-pulse" />
-                        <div className="space-y-2">
-                          <div className="h-4 w-24 bg-slate-800 rounded animate-pulse" />
-                          <div className="h-3 w-32 bg-slate-800 rounded animate-pulse" />
+                        <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center">
+                          <Wallet className="w-5 h-5 text-slate-600" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-slate-400">No tokens found</div>
+                          <div className="text-xs text-slate-600">Fund your vault first</div>
                         </div>
                       </div>
                       <ChevronDown className="w-3 h-3 text-slate-500" />
@@ -447,23 +508,29 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
                 </div>
 
                 {/* Dropdown Menu */}
-                {isTokenDropdownOpen && (
-                  <div className="absolute top-full left-0 w-full mt-2 bg-slate-900 border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden">
+                {isTokenDropdownOpen && availableTokens.length > 0 && (
+                  <div className="absolute top-full left-0 w-full mt-2 bg-slate-900 border border-white/10 rounded-xl shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto">
                     {availableTokens.map((token) => (
                       <div
                         key={token.mint}
-                        className="p-3 hover:bg-white/5 flex items-center gap-3 cursor-pointer transition-colors"
+                        className="p-3 hover:bg-white/5 flex items-center justify-between cursor-pointer transition-colors"
                         onClick={() => {
                           setSelectedToken(token);
                           setIsTokenDropdownOpen(false);
                         }}
                       >
-                        <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400">
-                          {token.symbol[0]}
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400">
+                            {token.symbol[0]}
+                          </div>
+                          <div>
+                            <div className="text-sm text-white font-medium">{token.symbol}</div>
+                            <div className="text-[10px] text-slate-500 font-mono">{token.mint.slice(0, 8)}...</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-sm text-white font-medium">{token.symbol}</div>
-                          <div className="text-[10px] text-slate-500 font-mono">{token.mint.slice(0, 8)}...</div>
+                        <div className="text-right">
+                          <div className="text-xs text-slate-500">Balance</div>
+                          <div className="text-sm font-mono text-white">{token.balance?.toFixed(2) || '0'}</div>
                         </div>
                       </div>
                     ))}
