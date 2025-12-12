@@ -278,20 +278,20 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
     });
 
     if (!publicKey || !currentProject?.vault_public_key) {
-      setError("Wallet not connected or project vault not found");
+      setError("Wallet not connected or project vault not found. Please ensure a project is selected.");
       return;
     }
 
     setLoading(true);
     setError(null);
-    
+
     // Add status message for user
     const statusDiv = document.createElement('div');
     statusDiv.id = 'funding-status';
     statusDiv.className = 'fixed top-4 right-4 bg-slate-900 border border-purple-500/50 rounded-xl p-4 z-50 shadow-2xl';
     statusDiv.innerHTML = '<div class="text-sm text-white">Preparing transaction...</div>';
     document.body.appendChild(statusDiv);
-    
+
     const updateStatus = (message: string) => {
       const status = document.getElementById('funding-status');
       if (status) {
@@ -325,7 +325,7 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
       if (!skipStreamflow && selectedToken) {
         try {
           updateStatus(`💰 Funding treasury with ${amount} ${selectedToken.symbol}...`);
-          
+
           // Import dynamically to avoid SSR issues
           const { Transaction, SystemProgram } = await import("@solana/web3.js");
           const { createTransferInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID } = await import("@solana/spl-token");
@@ -353,7 +353,7 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
             // SPL Token Transfer
             const mintPubkey = new PublicKey(selectedToken.mint);
             console.log(`[FUNDING] Token mint: ${mintPubkey.toBase58()}`);
-            
+
             updateStatus(`🔍 Checking vault token account...`);
             const fromAta = await getAssociatedTokenAddress(mintPubkey, publicKey);
             const toAta = await getAssociatedTokenAddress(mintPubkey, vaultPubkey);
@@ -421,7 +421,7 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
 
 
       updateStatus(`📦 Creating vesting pool...`);
-      
+
       await api.post("/pools", {
         name: poolName || `Vesting - ${new Date().toLocaleDateString()}`,
         total_pool_amount: Number(amount),
@@ -442,19 +442,19 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
       });
 
       updateStatus(`✨ Pool created successfully!`);
-      
+
       // Remove status after 2 seconds
       setTimeout(() => {
         const status = document.getElementById('funding-status');
         if (status) status.remove();
       }, 2000);
-      
+
       onModeChange(currentMode);
       if (onSuccess) onSuccess();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Creation failed");
-      
+
       // Remove status on error
       const status = document.getElementById('funding-status');
       if (status) status.remove();
@@ -818,7 +818,9 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
 
                 <div className="text-slate-500">Allocations</div>
                 <div className="text-right text-white">
-                  {currentMode === "manual" ? manualAllocations.length : rules.length} recipients/rules
+                  {currentMode === "manual"
+                    ? `${manualAllocations.length} recipients`
+                    : `${rules.length} rules configured`}
                 </div>
               </div>
             </div>
