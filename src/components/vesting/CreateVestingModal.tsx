@@ -156,7 +156,7 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
         }
         // Try to match with project token
         if (currentProject?.mint_address && t.mint === currentProject.mint_address) {
-          return { ...t, symbol: currentProject.token_symbol || "Project Token" };
+          return { ...t, symbol: currentProject.symbol || "Project Token" };
         }
         return t;
       });

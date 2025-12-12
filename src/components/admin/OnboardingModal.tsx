@@ -261,7 +261,7 @@ export function OnboardingModal({ isOpen: externalIsOpen, onClose: externalOnClo
                 Your project vault is funded and configured. You can now start creating vesting pools.
               </p>
             </div>
-            <Button className="w-full" onClick={() => setIsOpen(false)}>
+            <Button className="w-full" onClick={handleClose}>
               Enter Dashboard
             </Button>
           </div>
