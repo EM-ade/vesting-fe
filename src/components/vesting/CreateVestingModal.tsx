@@ -284,6 +284,21 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
 
     setLoading(true);
     setError(null);
+    
+    // Add status message for user
+    const statusDiv = document.createElement('div');
+    statusDiv.id = 'funding-status';
+    statusDiv.className = 'fixed top-4 right-4 bg-slate-900 border border-purple-500/50 rounded-xl p-4 z-50 shadow-2xl';
+    statusDiv.innerHTML = '<div class="text-sm text-white">Preparing transaction...</div>';
+    document.body.appendChild(statusDiv);
+    
+    const updateStatus = (message: string) => {
+      const status = document.getElementById('funding-status');
+      if (status) {
+        status.innerHTML = `<div class="text-sm text-white">${message}</div>`;
+      }
+    };
+
     try {
       const start = cycleStart ? new Date(cycleStart).getTime() / 1000 : Math.floor(Date.now() / 1000);
       const end = new Date(cycleEnd).getTime() / 1000;
@@ -308,71 +323,105 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
       // 1. Transfer tokens from User Wallet to Project Vault (Treasury)
       // Unless skipping Streamflow (testing mode)
       if (!skipStreamflow && selectedToken) {
-        // Import dynamically to avoid SSR issues
-        const { Transaction, SystemProgram } = await import("@solana/web3.js");
-        const { createTransferInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction } = await import("@solana/spl-token");
+        try {
+          updateStatus(`💰 Funding treasury with ${amount} ${selectedToken.symbol}...`);
+          
+          // Import dynamically to avoid SSR issues
+          const { Transaction, SystemProgram } = await import("@solana/web3.js");
+          const { createTransferInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID } = await import("@solana/spl-token");
 
-        const vaultPubkey = new PublicKey(currentProject.vault_public_key);
-        const amountBaseUnits = Math.floor(Number(amount) * Math.pow(10, selectedToken.decimals));
+          const vaultPubkey = new PublicKey(currentProject.vault_public_key);
+          const amountBaseUnits = Math.floor(Number(amount) * Math.pow(10, selectedToken.decimals));
 
-        const transaction = new Transaction();
+          console.log(`[FUNDING] Preparing to transfer ${amount} ${selectedToken.symbol} (${amountBaseUnits} base units)`);
+          console.log(`[FUNDING] From: ${publicKey.toBase58()}`);
+          console.log(`[FUNDING] To: ${vaultPubkey.toBase58()}`);
 
-        if (selectedToken.isNative) {
-          // SOL Transfer
-          transaction.add(
-            SystemProgram.transfer({
-              fromPubkey: publicKey,
-              toPubkey: vaultPubkey,
-              lamports: amountBaseUnits,
-            })
-          );
-        } else {
-          // SPL Token Transfer
-          const mintPubkey = new PublicKey(selectedToken.mint);
-          const fromAta = await getAssociatedTokenAddress(mintPubkey, publicKey);
-          const toAta = await getAssociatedTokenAddress(mintPubkey, vaultPubkey, true); // Allow owner off-curve (PDA) if needed, though vault is usually a keypair
+          const transaction = new Transaction();
 
-          // Check if destination ATA exists (it might not if this is the first transfer)
-          const toAccountInfo = await connection.getAccountInfo(toAta);
-
-          if (!toAccountInfo) {
-            // Create ATA for the vault, paid by the user
+          if (selectedToken.isNative) {
+            // SOL Transfer
+            console.log(`[FUNDING] Adding SOL transfer instruction`);
             transaction.add(
-              createAssociatedTokenAccountInstruction(
-                publicKey, // payer
+              SystemProgram.transfer({
+                fromPubkey: publicKey,
+                toPubkey: vaultPubkey,
+                lamports: amountBaseUnits,
+              })
+            );
+          } else {
+            // SPL Token Transfer
+            const mintPubkey = new PublicKey(selectedToken.mint);
+            console.log(`[FUNDING] Token mint: ${mintPubkey.toBase58()}`);
+            
+            updateStatus(`🔍 Checking vault token account...`);
+            const fromAta = await getAssociatedTokenAddress(mintPubkey, publicKey);
+            const toAta = await getAssociatedTokenAddress(mintPubkey, vaultPubkey);
+
+            console.log(`[FUNDING] From ATA: ${fromAta.toBase58()}`);
+            console.log(`[FUNDING] To ATA: ${toAta.toBase58()}`);
+
+            // Check if destination ATA exists (it might not if this is the first transfer)
+            const toAccountInfo = await connection.getAccountInfo(toAta);
+
+            if (!toAccountInfo) {
+              updateStatus(`🏗️ Creating vault token account (~0.002 SOL rent)...`);
+              console.log(`[FUNDING] Vault token account doesn't exist - creating it (rent paid by user)`);
+              // Create ATA for the vault, paid by the user
+              transaction.add(
+                createAssociatedTokenAccountInstruction(
+                  publicKey, // payer (user pays rent ~0.002 SOL)
+                  toAta, // account to create
+                  vaultPubkey, // owner of the new account
+                  mintPubkey, // token mint
+                  TOKEN_PROGRAM_ID
+                )
+              );
+            } else {
+              console.log(`[FUNDING] Vault token account already exists`);
+            }
+
+            // Add transfer instruction
+            console.log(`[FUNDING] Adding token transfer instruction`);
+            transaction.add(
+              createTransferInstruction(
+                fromAta,
                 toAta,
-                vaultPubkey, // owner
-                mintPubkey
+                publicKey,
+                amountBaseUnits,
+                [],
+                TOKEN_PROGRAM_ID
               )
             );
           }
 
-          transaction.add(
-            createTransferInstruction(
-              fromAta,
-              toAta,
-              publicKey,
-              amountBaseUnits
-            )
-          );
+          // Send transaction
+          updateStatus(`📝 Please approve the transaction in your wallet...`);
+          console.log(`[FUNDING] Sending transaction...`);
+          const signature = await sendTransaction(transaction, connection);
+          console.log(`[FUNDING] Transaction sent: ${signature}`);
+
+          // Wait for confirmation
+          updateStatus(`⏳ Confirming transaction...`);
+          const latestBlockhash = await connection.getLatestBlockhash();
+          await connection.confirmTransaction({
+            signature,
+            blockhash: latestBlockhash.blockhash,
+            lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+          }, 'confirmed');
+
+          updateStatus(`✅ Tokens transferred successfully!`);
+          console.log(`[FUNDING] ✅ Transaction confirmed: https://solscan.io/tx/${signature}`);
+        } catch (fundingError) {
+          console.error(`[FUNDING] ❌ Failed to transfer tokens:`, fundingError);
+          throw new Error(`Failed to transfer tokens to treasury: ${fundingError instanceof Error ? fundingError.message : 'Unknown error'}`);
         }
-
-        // Send transaction
-        const signature = await sendTransaction(transaction, connection);
-
-        // Wait for confirmation
-        const latestBlockhash = await connection.getLatestBlockhash();
-        await connection.confirmTransaction({
-          signature,
-          blockhash: latestBlockhash.blockhash,
-          lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-        });
-
-        console.log("Funding transaction confirmed:", signature);
       }
 
 
 
+      updateStatus(`📦 Creating vesting pool...`);
+      
       await api.post("/pools", {
         name: poolName || `Vesting - ${new Date().toLocaleDateString()}`,
         total_pool_amount: Number(amount),
@@ -392,11 +441,23 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
         token_mint: selectedToken?.mint,
       });
 
+      updateStatus(`✨ Pool created successfully!`);
+      
+      // Remove status after 2 seconds
+      setTimeout(() => {
+        const status = document.getElementById('funding-status');
+        if (status) status.remove();
+      }, 2000);
+      
       onModeChange(currentMode);
       if (onSuccess) onSuccess();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Creation failed");
+      
+      // Remove status on error
+      const status = document.getElementById('funding-status');
+      if (status) status.remove();
     } finally {
       setLoading(false);
     }
