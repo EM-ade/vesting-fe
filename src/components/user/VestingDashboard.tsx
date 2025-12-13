@@ -55,13 +55,13 @@ export function VestingDashboard() {
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const isInitialLoad = useRef(true);
-  
+
   // Demo mode state
   const [demoMode, setDemoMode] = useState(false);
-  
+
   // Animated percentage counter
   const [animatedPercentage, setAnimatedPercentage] = useState(0);
-  
+
   // Live countdown timer
   const [liveCountdown, setLiveCountdown] = useState(0);
 
@@ -188,7 +188,7 @@ export function VestingDashboard() {
   const toggleDemoMode = useCallback(() => {
     const newDemoMode = !demoMode;
     setDemoMode(newDemoMode);
-    
+
     if (newDemoMode) {
       // Enter demo mode
       setWallet(DEMO_WALLET);
@@ -210,12 +210,12 @@ export function VestingDashboard() {
 
   const formatCountdown = (seconds: number) => {
     if (seconds <= 0) return "Fully unlocked";
-    
+
     const days = Math.floor(seconds / 86400);
     const hours = Math.floor((seconds % 86400) / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     // Show different formats based on time remaining
     if (days > 0) {
       return `${days}d ${hours}h ${minutes}m`;
@@ -250,19 +250,19 @@ export function VestingDashboard() {
 
     return () => clearInterval(timer);
   }, [summary]);
-  
+
   // Initialize and update live countdown
   useEffect(() => {
     if (!summary) return;
     setLiveCountdown(summary.nextUnlockTime - Math.floor(Date.now() / 1000));
   }, [summary]);
-  
+
   // Tick countdown every second
   useEffect(() => {
     const timer = setInterval(() => {
       setLiveCountdown(prev => Math.max(0, prev - 1));
     }, 1000);
-    
+
     return () => clearInterval(timer);
   }, []);
 
@@ -319,7 +319,7 @@ export function VestingDashboard() {
               </div>
               <div className="flex-1">
                 <p className="font-semibold text-green-400">{successToast.message}</p>
-                <a 
+                <a
                   href={`https://solscan.io/tx/${successToast.signature}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -346,9 +346,9 @@ export function VestingDashboard() {
         {/* Top row: Logo + Title on left, Wallet on right */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <Image 
-              src="/WhatsApp Image 2025-10-04 at 12.46.50 PM.jpeg" 
-              alt="Lil Gargs" 
+            <Image
+              src="/WhatsApp Image 2025-10-04 at 12.46.50 PM.jpeg"
+              alt="Lil Gargs"
               width={48}
               height={48}
               className="h-12 w-12 shrink-0 rounded-full border-2 border-purple-500/50"
@@ -359,11 +359,10 @@ export function VestingDashboard() {
             {/* Demo Mode Toggle */}
             <button
               onClick={toggleDemoMode}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
-                demoMode
-                  ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/50 hover:bg-yellow-500/30'
-                  : 'bg-purple-500/20 text-purple-300 border border-purple-500/50 hover:bg-purple-500/30'
-              }`}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${demoMode
+                ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/50 hover:bg-yellow-500/30'
+                : 'bg-purple-500/20 text-purple-300 border border-purple-500/50 hover:bg-purple-500/30'
+                }`}
             >
               {demoMode ? '✨ Exit Demo' : '👁️ View Demo'}
             </button>
@@ -459,21 +458,19 @@ export function VestingDashboard() {
           <div className="flex gap-2 border-b border-white/10">
             <button
               onClick={() => setActiveTab("overview")}
-              className={`px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === "overview"
-                  ? "border-b-2 border-purple-500 text-white"
-                  : "text-white/60 hover:text-white"
-              }`}
+              className={`px-4 py-3 text-sm font-medium transition-colors ${activeTab === "overview"
+                ? "border-b-2 border-purple-500 text-white"
+                : "text-white/60 hover:text-white"
+                }`}
             >
               Overview
             </button>
             <button
               onClick={() => setActiveTab("history")}
-              className={`px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === "history"
-                  ? "border-b-2 border-purple-500 text-white"
-                  : "text-white/60 hover:text-white"
-              }`}
+              className={`px-4 py-3 text-sm font-medium transition-colors ${activeTab === "history"
+                ? "border-b-2 border-purple-500 text-white"
+                : "text-white/60 hover:text-white"
+                }`}
             >
               History
             </button>
@@ -579,7 +576,7 @@ export function VestingDashboard() {
                                   <p className="text-white font-semibold">{awaiting ? 'Awaiting Claim' : badge.text}</p>
                                   <div className="text-xs text-white/60">Progress: {progress.toFixed(0)}%</div>
                                   {derivedStatus === 'active' && !isDisabled && (
-                                    <div className="text-xs text-white/50">Time to Unlock: {formatCountdown(Math.max(0, summary.nextUnlockTime - Math.floor(Date.now()/1000)))}</div>
+                                    <div className="text-xs text-white/50">Time to Unlock: {formatCountdown(Math.max(0, summary.nextUnlockTime - Math.floor(Date.now() / 1000)))}</div>
                                   )}
                                 </div>
                               </div>
@@ -740,14 +737,14 @@ function ClaimModal({ summary, onClose, onSuccess, demoMode }: ClaimModalProps) 
     }
 
     const claimAmount = parseFloat(amount);
-    
+
     // Minimum claim amount validation (matches backend)
     const MIN_CLAIM_AMOUNT = 0.001;
     if (claimAmount < MIN_CLAIM_AMOUNT) {
       setError(`Minimum claim amount is ${MIN_CLAIM_AMOUNT} tokens`);
       return;
     }
-    
+
     if (claimAmount > summary.totalClaimable) {
       setError(`Amount exceeds available balance of ${summary.totalClaimable.toFixed(2)}`);
       return;
@@ -769,11 +766,11 @@ function ClaimModal({ summary, onClose, onSuccess, demoMode }: ClaimModalProps) 
     try {
       // Execute the full claim flow: prepare -> sign -> submit
       const result = await executeClaim(claimAmount);
-      
+
       if (result) {
         onSuccess(
           `Successfully claimed ${result.totalAmountClaimed.toLocaleString()} $GARG`,
-          result.tokenTransactionSignature
+          result.transactionSignature
         );
       } else {
         setError("Transaction failed. Please try again.");
@@ -781,10 +778,10 @@ function ClaimModal({ summary, onClose, onSuccess, demoMode }: ClaimModalProps) 
       }
     } catch (err) {
       let errorMessage = "Something went wrong. Please try again.";
-      
+
       if (err instanceof Error) {
         const msg = err.message.toLowerCase();
-        
+
         // User cancelled/rejected transaction
         if (msg.includes('user rejected') || msg.includes('user cancelled') || msg.includes('user denied')) {
           errorMessage = "You cancelled the transaction. No tokens were claimed.";
@@ -818,7 +815,7 @@ function ClaimModal({ summary, onClose, onSuccess, demoMode }: ClaimModalProps) 
           errorMessage = err.message;
         }
       }
-      
+
       setError(errorMessage);
       setClaimStep("input");
     }
@@ -858,22 +855,22 @@ function ClaimModal({ summary, onClose, onSuccess, demoMode }: ClaimModalProps) 
                 </div>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <p className="text-center text-white font-semibold">
                 {status === 'preparing' && 'Preparing Claim...'}
-                {status === 'signing_fee' && 'Waiting for Signature...'}
-                {status === 'confirming_fee' && 'Confirming Fee Payment...'}
-                {status === 'processing_claim' && 'Processing Claim...'}
-                {status === 'confirming_claim' && 'Confirming Transaction...'}
+                {status === 'signing' && 'Waiting for Signature...'}
+                {status === 'submitting' && 'Submitting Transaction...'}
+                {status === 'confirming' && 'Confirming Transaction...'}
+                {status === 'recording' && 'Recording Claim...'}
                 {status === 'success' && 'Claim Successful!'}
               </p>
               <p className="text-center text-sm text-white/60">
                 {status === 'preparing' && 'Calculating available amounts...'}
-                {status === 'signing_fee' && 'Please approve the transaction in your wallet'}
-                {status === 'confirming_fee' && 'Waiting for blockchain confirmation...'}
-                {status === 'processing_claim' && 'Transferring tokens from treasury...'}
-                {status === 'confirming_claim' && 'Verifying transaction on Solana...'}
+                {status === 'signing' && 'Please approve the transaction in your wallet'}
+                {status === 'submitting' && 'Sending to Solana network...'}
+                {status === 'confirming' && 'Waiting for blockchain confirmation...'}
+                {status === 'recording' && 'Updating database records...'}
                 {status === 'success' && 'Your tokens have been claimed!'}
               </p>
             </div>
@@ -970,11 +967,10 @@ function ClaimModal({ summary, onClose, onSuccess, demoMode }: ClaimModalProps) 
                     )}
                   </div>
                   <div className="flex-1">
-                    <p className={`text-sm font-medium ${
-                      error.includes('cancelled') ? 'text-yellow-300' : 
-                      error.includes('Insufficient SOL') ? 'text-orange-300' : 
-                      'text-red-300'
-                    }`}>
+                    <p className={`text-sm font-medium ${error.includes('cancelled') ? 'text-yellow-300' :
+                      error.includes('Insufficient SOL') ? 'text-orange-300' :
+                        'text-red-300'
+                      }`}>
                       {error}
                     </p>
                     {error.includes('Insufficient SOL') && (
@@ -983,7 +979,7 @@ function ClaimModal({ summary, onClose, onSuccess, demoMode }: ClaimModalProps) 
                       </p>
                     )}
                     {error.includes('exceeds available balance') && (
-                      <button 
+                      <button
                         onClick={() => {
                           setError(null);
                           window.dispatchEvent(new CustomEvent('refresh-summary'));

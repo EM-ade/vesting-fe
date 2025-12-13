@@ -332,74 +332,51 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
 
           const vaultPubkey = new PublicKey(currentProject.vault_public_key);
           const amountBaseUnits = Math.floor(Number(amount) * Math.pow(10, selectedToken.decimals));
+          const STREAMFLOW_DEPLOYMENT_FEE = 0.02 * LAMPORTS_PER_SOL; // 0.02 SOL
 
           console.log(`[FUNDING] Preparing to transfer ${amount} ${selectedToken.symbol} (${amountBaseUnits} base units)`);
-          console.log(`[FUNDING] From: ${publicKey.toBase58()}`);
-          console.log(`[FUNDING] To: ${vaultPubkey.toBase58()}`);
 
           const transaction = new Transaction();
 
-          if (selectedToken.isNative) {
-            // SOL Transfer
-            console.log(`[FUNDING] Adding SOL transfer instruction`);
+          // A. Token Transfer Instruction
+          // Get source ATA (User)
+          const sourceATA = await getAssociatedTokenAddress(new PublicKey(selectedToken.mint), publicKey);
+          // Get destination ATA (Vault)
+          const destATA = await getAssociatedTokenAddress(new PublicKey(selectedToken.mint), vaultPubkey);
+
+          // Check if dest ATA exists, if not, create it (User pays rent)
+          const destAccountInfo = await connection.getAccountInfo(destATA);
+          if (!destAccountInfo) {
             transaction.add(
-              SystemProgram.transfer({
-                fromPubkey: publicKey,
-                toPubkey: vaultPubkey,
-                lamports: amountBaseUnits,
-              })
-            );
-          } else {
-            // SPL Token Transfer
-            const mintPubkey = new PublicKey(selectedToken.mint);
-            console.log(`[FUNDING] Token mint: ${mintPubkey.toBase58()}`);
-
-            updateStatus(`🔍 Checking vault token account...`);
-            const fromAta = await getAssociatedTokenAddress(mintPubkey, publicKey);
-            const toAta = await getAssociatedTokenAddress(mintPubkey, vaultPubkey);
-
-            console.log(`[FUNDING] From ATA: ${fromAta.toBase58()}`);
-            console.log(`[FUNDING] To ATA: ${toAta.toBase58()}`);
-
-            // Check if destination ATA exists (it might not if this is the first transfer)
-            const toAccountInfo = await connection.getAccountInfo(toAta);
-
-            if (!toAccountInfo) {
-              updateStatus(`🏗️ Creating vault token account (~0.002 SOL rent)...`);
-              console.log(`[FUNDING] Vault token account doesn't exist - creating it (rent paid by user)`);
-              // Create ATA for the vault, paid by the user
-              transaction.add(
-                createAssociatedTokenAccountInstruction(
-                  publicKey, // payer (user pays rent ~0.002 SOL)
-                  toAta, // account to create
-                  vaultPubkey, // owner of the new account
-                  mintPubkey, // token mint
-                  TOKEN_PROGRAM_ID
-                )
-              );
-            } else {
-              console.log(`[FUNDING] Vault token account already exists`);
-            }
-
-            // Add transfer instruction
-            console.log(`[FUNDING] Adding token transfer instruction`);
-            transaction.add(
-              createTransferInstruction(
-                fromAta,
-                toAta,
-                publicKey,
-                amountBaseUnits,
-                [],
-                TOKEN_PROGRAM_ID
+              createAssociatedTokenAccountInstruction(
+                publicKey, // Payer
+                destATA,
+                vaultPubkey, // Owner
+                new PublicKey(selectedToken.mint)
               )
             );
           }
 
-          // Send transaction
-          updateStatus(`📝 Please approve the transaction in your wallet...`);
-          console.log(`[FUNDING] Sending transaction...`);
+          transaction.add(
+            createTransferInstruction(
+              sourceATA,
+              destATA,
+              publicKey,
+              amountBaseUnits
+            )
+          );
+
+          // B. Streamflow Fee Transfer Instruction (0.02 SOL)
+          transaction.add(
+            SystemProgram.transfer({
+              fromPubkey: publicKey,
+              toPubkey: vaultPubkey,
+              lamports: STREAMFLOW_DEPLOYMENT_FEE
+            })
+          );
+
+          // Send Transaction
           const signature = await sendTransaction(transaction, connection);
-          console.log(`[FUNDING] Transaction sent: ${signature}`);
 
           // Wait for confirmation
           updateStatus(`⏳ Confirming transaction...`);
