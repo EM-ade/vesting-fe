@@ -89,7 +89,7 @@ const DEFAULT_RULE: RuleForm = {
 export function CreateVestingModal({ open, onClose, mode, onModeChange, onSuccess }: CreateVestingModalProps) {
   const { currentProject } = useProject();
   const { connection } = useConnection();
-  const { publicKey, sendTransaction } = useWallet();
+  const { publicKey, sendTransaction, signTransaction } = useWallet();
   const [currentMode, setCurrentMode] = useState<VestingMode>(mode);
   const [poolName, setPoolName] = useState("");
   const [amount, setAmount] = useState("");
@@ -271,10 +271,9 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
   }
 
   async function handleCreate() {
-    console.log("[CreateVestingModal] Debug:", {
+    console.log("[CreateVestingModal] Creating pool:", {
       publicKey: publicKey?.toBase58(),
-      currentProject,
-      vaultKey: currentProject?.vault_public_key
+      currentProject: currentProject?.name
     });
 
     if (!publicKey || !currentProject?.vault_public_key) {
@@ -324,17 +323,20 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
       // Unless skipping Streamflow (testing mode)
       if (!skipStreamflow && selectedToken) {
         try {
-          updateStatus(`💰 Funding treasury with ${amount} ${selectedToken.symbol}...`);
+          updateStatus(`💰 Funding treasury with ${amount} ${selectedToken.symbol} (+0.5% fee)...`);
 
           // Import dynamically to avoid SSR issues
           const { Transaction, SystemProgram } = await import("@solana/web3.js");
           const { createTransferInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID } = await import("@solana/spl-token");
 
           const vaultPubkey = new PublicKey(currentProject.vault_public_key);
-          const amountBaseUnits = Math.floor(Number(amount) * Math.pow(10, selectedToken.decimals));
           const STREAMFLOW_DEPLOYMENT_FEE = 0.02 * LAMPORTS_PER_SOL; // 0.02 SOL
 
-          console.log(`[FUNDING] Preparing to transfer ${amount} ${selectedToken.symbol} (${amountBaseUnits} base units)`);
+          // Calculate amount with 0.5% buffer for Streamflow fees
+          const amountWithBuffer = Number(amount) * 1.005;
+          const amountBaseUnits = Math.floor(amountWithBuffer * Math.pow(10, selectedToken.decimals));
+
+          console.log(`[FUNDING] Preparing to transfer ${amount} ${selectedToken.symbol} + 0.5% fee (${amountBaseUnits} base units)`);
 
           const transaction = new Transaction();
 
@@ -376,11 +378,24 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
           );
 
           // Send Transaction
-          const signature = await sendTransaction(transaction, connection);
+          // Explicitly set feePayer and recentBlockhash
+          const latestBlockhash = await connection.getLatestBlockhash();
+          transaction.feePayer = publicKey;
+          transaction.recentBlockhash = latestBlockhash.blockhash;
+
+
+
+
+
+          let signature: string;
+
+          // Send Transaction
+          signature = await sendTransaction(transaction, connection);
+
+          console.log(`[FUNDING] Transaction sent! Signature: ${signature}`);
 
           // Wait for confirmation
           updateStatus(`⏳ Confirming transaction...`);
-          const latestBlockhash = await connection.getLatestBlockhash();
           await connection.confirmTransaction({
             signature,
             blockhash: latestBlockhash.blockhash,
@@ -793,13 +808,31 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
                     : "-"}
                 </div>
 
-                <div className="text-slate-500">Allocations</div>
                 <div className="text-right text-white">
                   {currentMode === "manual"
                     ? `${manualAllocations.length} recipients`
                     : `${rules.length} rules configured`}
                 </div>
               </div>
+
+              {!skipStreamflow && (
+                <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4 flex gap-3">
+                  <Info className="w-5 h-5 text-purple-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium text-purple-200">Streamflow Deployment Fees</div>
+                    <div className="text-xs text-purple-300/80 leading-relaxed">
+                      Creating this pool on-chain requires:
+                      <ul className="list-disc list-inside mt-1 ml-1 space-y-0.5">
+                        <li>~0.02 SOL for rent and transaction fees</li>
+                        <li>0.5% extra tokens ({((Number(amount) || 0) * 0.005).toFixed(4)} {selectedToken?.symbol}) for protocol fees</li>
+                      </ul>
+                      <div className="mt-2 font-medium text-purple-200">
+                        Total Funding: {(Number(amount) * 1.005).toFixed(4)} {selectedToken?.symbol}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <label className="flex items-center gap-3 p-4 rounded-xl border border-white/10 bg-white/5 cursor-pointer hover:bg-white/10 transition-colors">

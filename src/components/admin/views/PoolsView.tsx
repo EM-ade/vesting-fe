@@ -219,6 +219,7 @@ export function PoolsView() {
                   pool={pool}
                   onClick={() => handlePoolClick(pool)}
                   onCancel={() => confirmCancelPool(pool.id)}
+                  onUpdate={loadPools}
                 />
               ))}
 
@@ -272,7 +273,7 @@ export function PoolsView() {
   );
 }
 
-function PoolRow({ pool, onClick, onCancel }: { pool: Pool, onClick: () => void, onCancel: () => void }) {
+function PoolRow({ pool, onClick, onCancel, onUpdate }: { pool: Pool, onClick: () => void, onCancel: () => void, onUpdate: () => void }) {
   const percentage = pool.streamflow?.vestedPercentage || 0;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [pauseLoading, setPauseLoading] = useState(false);
@@ -300,7 +301,7 @@ function PoolRow({ pool, onClick, onCancel }: { pool: Pool, onClick: () => void,
         action: isPaused ? 'resume' : 'pause'
       });
       // Refresh the pool list
-      window.location.reload();
+      onUpdate();
     } catch (error) {
       console.error('Failed to toggle pool state:', error);
     } finally {

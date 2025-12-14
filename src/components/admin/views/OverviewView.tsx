@@ -57,42 +57,53 @@ export function OverviewView() {
   const [eligibleWallets, setEligibleWallets] = useState<number>(0);
   const [activityLog, setActivityLog] = useState<ActivityLogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pools, setPools] = useState<Array<{ id: string; name: string; is_active: boolean }>>([]);
+  const [selectedPoolId, setSelectedPoolId] = useState<string>("all");
 
   useEffect(() => {
     const loadMetrics = async () => {
       if (!currentProject?.id) return;
       setLoading(true);
       try {
-        const [treasury, pools, historyStats, claims, claimsStatsRes, eligibleWalletsRes, activityLogRes] = await Promise.all([
-          api.get<{ allocations: { totalAllocated: number; totalClaimed: number }; metrics: { claimCount: number }; treasury: { balance: number } }>(`/treasury/status?projectId=${currentProject?.id}`),
-          api.get<Array<{ id: number; name: string; is_active: boolean }>>('/pools'),
-          api.get<ChartData[]>('/metrics/claim-history-stats'),
-          api.get<{ claims: RecentClaim[] }>('/claims?limit=5'),
-          api.get<ClaimStats>('/claims/stats').catch(() => null),
-          api.get<{ count: number }>(`/metrics/eligible-wallets?projectId=${currentProject?.id}`).catch(() => ({ count: 0 })),
-          api.get<{ activities: ActivityLogItem[] }>('/metrics/activity-log?limit=10').catch(() => ({ activities: [] }))
+        // Fetch pools first if not loaded
+        let currentPools = pools;
+        if (pools.length === 0) {
+          const poolsRes = await api.get<Array<{ id: string; name: string; is_active: boolean }>>('/pools');
+          setPools(poolsRes || []);
+          currentPools = poolsRes || [];
+        }
+
+        const poolQuery = selectedPoolId !== "all" ? `&poolId=${selectedPoolId}` : "";
+
+        const [treasury, historyStats, claims, claimsStatsRes, eligibleWalletsRes, activityLogRes] = await Promise.all([
+          api.get<{ allocations: { totalAllocated: number; totalClaimed: number }; metrics: { claimCount: number }; treasury: { balance: number } }>(`/treasury/status?projectId=${currentProject?.id}${poolQuery}`),
+          api.get<ChartData[]>(`/metrics/claim-history-stats?projectId=${currentProject?.id}${poolQuery}`),
+          api.get<{ claims: RecentClaim[] }>(`/claims?limit=5&projectId=${currentProject?.id}${poolQuery}`),
+          api.get<ClaimStats>(`/claims/stats?projectId=${currentProject?.id}${poolQuery}`).catch(() => null),
+          api.get<{ count: number }>(`/metrics/eligible-wallets?projectId=${currentProject?.id}${poolQuery}`).catch(() => ({ count: 0 })),
+          api.get<{ activities: ActivityLogItem[] }>(`/metrics/activity-log?limit=10&projectId=${currentProject?.id}`).catch(() => ({ activities: [] }))
         ]);
 
         setMetrics({
           totalValueLocked: treasury.allocations.totalAllocated,
           totalClaimed: treasury.allocations.totalClaimed,
-          activePoolsCount: pools.length,
+          activePoolsCount: currentPools.length,
           totalUsers: treasury.metrics.claimCount,
           treasuryBalance: treasury.treasury.balance
         });
 
         // Safely map history stats
         const historyData = Array.isArray(historyStats) ? historyStats.map((item: { date?: string; count?: number }) => ({
-            name: item.date ? new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Unknown',
-            claims: item.count || 0,
-            date: item.date || ''
+          name: item.date ? new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Unknown',
+          claims: item.count || 0,
+          date: item.date || ''
         })) : [];
-        
+
         setChartData(historyData);
-        
+
         // Safely set recent activity
         setRecentActivity(Array.isArray(claims.claims) ? claims.claims : []);
-        
+
         // Set new widgets data with safety checks
         if (claimsStatsRes) {
           console.log("Claims stats loaded:", claimsStatsRes);
@@ -104,11 +115,11 @@ export function OverviewView() {
         console.error("Failed to load overview:", error);
         // Set empty defaults on error
         setMetrics({
-            totalValueLocked: 0,
-            totalClaimed: 0,
-            activePoolsCount: 0,
-            totalUsers: 0,
-            treasuryBalance: 0
+          totalValueLocked: 0,
+          totalClaimed: 0,
+          activePoolsCount: 0,
+          totalUsers: 0,
+          treasuryBalance: 0
         });
       } finally {
         setLoading(false);
@@ -118,7 +129,7 @@ export function OverviewView() {
     if (currentProject?.id) {
       loadMetrics();
     }
-  }, [currentProject?.id]);
+  }, [currentProject?.id, selectedPoolId]);
 
   if (loading) return (
     <div className="space-y-8 animate-pulse">
@@ -126,7 +137,7 @@ export function OverviewView() {
         <Skeleton className="h-8 w-48 bg-slate-900" />
         <Skeleton className="h-4 w-32 bg-slate-900" />
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[1, 2, 3, 4].map((i) => (
           <Skeleton key={i} className="h-32 rounded-xl bg-slate-900 border border-white/5" />
@@ -169,34 +180,46 @@ export function OverviewView() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white tracking-tight">Dashboard Overview</h1>
-        <div className="flex items-center gap-2 text-xs font-mono text-slate-500">
-          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          SYSTEM OPERATIONAL
+        <div className="flex items-center gap-4">
+          <select
+            value={selectedPoolId}
+            onChange={(e) => setSelectedPoolId(e.target.value)}
+            className="bg-slate-950 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-purple-500/50"
+          >
+            <option value="all">All Pools</option>
+            {pools.map((pool) => (
+              <option key={pool.id} value={pool.id}>{pool.name}</option>
+            ))}
+          </select>
+          <div className="flex items-center gap-2 text-xs font-mono text-slate-500">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            SYSTEM OPERATIONAL
+          </div>
         </div>
       </div>
-      
+
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard 
-          label="Total Value Locked" 
-          value={formatTokenAmount(metrics?.totalValueLocked || 0)} 
+        <MetricCard
+          label="Total Value Locked"
+          value={formatTokenAmount(metrics?.totalValueLocked || 0)}
           trend="+12.5%"
           icon={<Wallet className="w-4 h-4 text-slate-400" />}
         />
-        <MetricCard 
-          label="Total Claimed" 
-          value={formatTokenAmount(metrics?.totalClaimed || 0)} 
+        <MetricCard
+          label="Total Claimed"
+          value={formatTokenAmount(metrics?.totalClaimed || 0)}
           trend="+5.2%"
           icon={<TrendingUp className="w-4 h-4 text-slate-400" />}
         />
-        <MetricCard 
-          label="Active Pools" 
-          value={metrics?.activePoolsCount.toString() || "0"} 
+        <MetricCard
+          label="Active Pools"
+          value={metrics?.activePoolsCount.toString() || "0"}
           icon={<Activity className="w-4 h-4 text-slate-400" />}
         />
-        <MetricCard 
-          label="Treasury Balance" 
-          value={formatTokenAmount(metrics?.treasuryBalance || 0)} 
+        <MetricCard
+          label="Treasury Balance"
+          value={formatTokenAmount(metrics?.treasuryBalance || 0)}
           icon={<Users className="w-4 h-4 text-slate-400" />}
         />
       </div>
@@ -214,43 +237,43 @@ export function OverviewView() {
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorClaim" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis 
-                  dataKey="name" 
-                  stroke="#475569" 
-                  tick={{fontSize: 10, fontFamily: 'monospace'}} 
+                <XAxis
+                  dataKey="name"
+                  stroke="#475569"
+                  tick={{ fontSize: 10, fontFamily: 'monospace' }}
                   tickLine={false}
                   axisLine={false}
                   dy={10}
                 />
-                <YAxis 
-                  stroke="#475569" 
-                  tick={{fontSize: 10, fontFamily: 'monospace'}} 
+                <YAxis
+                  stroke="#475569"
+                  tick={{ fontSize: 10, fontFamily: 'monospace' }}
                   tickLine={false}
                   axisLine={false}
                   dx={-10}
                 />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#0f172a', 
-                    border: '1px solid #1e293b', 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#0f172a',
+                    border: '1px solid #1e293b',
                     borderRadius: '4px',
                     fontSize: '12px',
                     fontFamily: 'monospace'
                   }}
                   itemStyle={{ color: '#e2e8f0' }}
                 />
-                <Area 
-                  type="monotone" 
-                  dataKey="claims" 
-                  stroke="#8b5cf6" 
-                  strokeWidth={2} 
-                  fillOpacity={1} 
-                  fill="url(#colorClaim)" 
+                <Area
+                  type="monotone"
+                  dataKey="claims"
+                  stroke="#8b5cf6"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorClaim)"
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -278,9 +301,9 @@ export function OverviewView() {
                         {formatDistanceToNow(new Date(claim.created_at), { addSuffix: true })}
                       </p>
                     </div>
-                    <a 
-                      href={`https://solscan.io/tx/${claim.tx}`} 
-                      target="_blank" 
+                    <a
+                      href={`https://solscan.io/tx/${claim.tx}`}
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="p-1.5 text-slate-600 hover:text-white hover:bg-white/5 rounded transition-colors"
                     >
@@ -407,14 +430,14 @@ function MetricCard({ label, value, icon, trend }: { label: string; value: strin
   return (
     <div className="bg-slate-950 border border-white/10 p-6 rounded-xl hover:border-purple-500/20 transition-all group relative overflow-hidden">
       <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
-      
+
       <div className="flex justify-between items-start mb-4 relative z-10">
         <h4 className="text-sm font-medium text-slate-500">{label}</h4>
         <div className="p-2 bg-slate-900 rounded-lg border border-white/5 text-slate-400 group-hover:text-purple-400 group-hover:border-purple-500/20 transition-colors">
           {icon}
         </div>
       </div>
-      
+
       <div className="flex items-baseline gap-3 relative z-10">
         <span className="text-2xl font-bold text-slate-100 tracking-tight">{value}</span>
         {trend && (
