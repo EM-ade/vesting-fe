@@ -96,6 +96,7 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
   const [cycleStart, setCycleStart] = useState("");
   const [cycleEnd, setCycleEnd] = useState("");
   const [cliffTime, setCliffTime] = useState("");
+  const [claimFee, setClaimFee] = useState("0.001");
   const [rules, setRules] = useState<RuleForm[]>([DEFAULT_RULE]);
   const [manualAllocations, setManualAllocations] = useState<ManualAllocation[]>([]);
   const [bulkMode, setBulkMode] = useState(false);
@@ -196,6 +197,7 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
     setCycleStart("");
     setCycleEnd("");
     setCliffTime("");
+    setClaimFee("0.001");
     setRules([{ ...DEFAULT_RULE, id: generateId() }]);
     setManualAllocations([]);
     setBulkMode(false);
@@ -334,7 +336,7 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
 
           // Calculate amount with 0.5% buffer for Streamflow fees
           const amountWithBuffer = Number(amount) * 1.005;
-          const amountBaseUnits = Math.floor(amountWithBuffer * Math.pow(10, selectedToken.decimals));
+          const amountBaseUnits = Math.round(amountWithBuffer * Math.pow(10, selectedToken.decimals));
 
           console.log(`[FUNDING] Preparing to transfer ${amount} ${selectedToken.symbol} + 0.5% fee (${amountBaseUnits} base units)`);
 
@@ -431,6 +433,7 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
         })) : undefined,
         skipStreamflow,
         token_mint: selectedToken?.mint,
+        claim_fee_lamports: claimFee ? Math.floor(Number(claimFee) * LAMPORTS_PER_SOL) : 0,
       });
 
       updateStatus(`✨ Pool created successfully!`);
@@ -606,6 +609,23 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
                   </div>
                 </div>
                 <p className="text-xs text-slate-500 mt-2">Total tokens to be distributed across all recipients.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Claim Fee (SOL) <span className="text-slate-600 normal-case tracking-normal">(Optional)</span></label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={claimFee}
+                    onChange={(e) => setClaimFee(e.target.value)}
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl pl-4 pr-12 py-3 text-white placeholder:text-slate-600 focus:border-purple-500/50 focus:outline-none font-mono"
+                    placeholder="0.001"
+                  />
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-500">
+                    SOL
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 mt-2">Fee charged to users when they claim. Leave empty or 0 for no fee.</p>
               </div>
             </div>
           </div>

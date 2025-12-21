@@ -170,7 +170,7 @@ function StatusPill({ label, tone = "info" }: StatusPillProps) {
 }
 
 export function AdminTopBar() {
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
   const pathname = usePathname();
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -200,15 +200,27 @@ export function AdminTopBar() {
   }, [pathname]);
 
   async function handlePauseStreams() {
-    if (!publicKey) return;
+    if (!publicKey || !signMessage) return;
     setActionLoading(true);
     setActionError(null);
     try {
-      await api.post("/streams/pause-all", {
+      // Generate signature
+      const timestamp = Date.now();
+      const messageObj = { timestamp };
+      const messageStr = JSON.stringify(messageObj);
+      const messageBytes = new TextEncoder().encode(messageStr);
+      const signatureBytes = await signMessage(messageBytes);
+      const signature = btoa(String.fromCharCode(...Array.from(signatureBytes)));
+
+      await api.post("/stream/pause-all", {
         adminWallet: publicKey.toBase58(),
+        signature,
+        message: messageStr,
       });
       setPauseModalOpen(false);
       alert("All streams paused successfully");
+      // Reload the page to reflect changes
+      window.location.reload();
     } catch (err) {
       setActionError(
         err instanceof Error ? err.message : "Failed to pause streams",
@@ -219,15 +231,27 @@ export function AdminTopBar() {
   }
 
   async function handleEmergencyStop() {
-    if (!publicKey) return;
+    if (!publicKey || !signMessage) return;
     setActionLoading(true);
     setActionError(null);
     try {
-      await api.post("/streams/emergency-stop", {
+      // Generate signature
+      const timestamp = Date.now();
+      const messageObj = { timestamp };
+      const messageStr = JSON.stringify(messageObj);
+      const messageBytes = new TextEncoder().encode(messageStr);
+      const signatureBytes = await signMessage(messageBytes);
+      const signature = btoa(String.fromCharCode(...Array.from(signatureBytes)));
+
+      await api.post("/stream/emergency-stop", {
         adminWallet: publicKey.toBase58(),
+        signature,
+        message: messageStr,
       });
       setEmergencyModalOpen(false);
       alert("Emergency stop executed successfully");
+      // Reload the page to reflect changes
+      window.location.reload();
     } catch (err) {
       setActionError(
         err instanceof Error ? err.message : "Failed to execute emergency stop",

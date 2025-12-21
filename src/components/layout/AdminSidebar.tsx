@@ -50,7 +50,7 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
       const messageBytes = new TextEncoder().encode(messageStr);
 
       const signatureBytes = await signMessage(messageBytes);
-      
+
       // Convert signature to base64
       // Helper function to safely convert Uint8Array to Base64 in browser
       const signature = btoa(String.fromCharCode(...Array.from(signatureBytes)));
@@ -75,17 +75,23 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
   const handlePauseResume = async () => {
     const endpoint = isPaused ? "/stream/resume-all" : "/stream/pause-all";
     const message = isPaused ? "Streams resumed successfully" : "All streams paused successfully";
-    
+
     const success = await signAndCall(endpoint, message);
     if (success) {
       setIsPaused(!isPaused);
+      // Reload the page to reflect changes
+      window.location.reload();
     }
   };
 
   const handleEmergencyStop = async () => {
     if (!confirm("CRITICAL WARNING: This will permanently stop ALL vesting streams. This action is irreversible. Are you sure?")) return;
-    
-    await signAndCall("/stream/emergency-stop", "Emergency stop executed. All streams cancelled.");
+
+    const success = await signAndCall("/stream/emergency-stop", "Emergency stop executed. All streams cancelled.");
+    if (success) {
+      // Reload the page to reflect changes
+      window.location.reload();
+    }
   };
 
   const navItems = [
@@ -108,29 +114,29 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
         {!collapsed && (
           <div className="flex items-center gap-3">
             <div className="relative w-8 h-8 rounded-lg overflow-hidden shadow-lg shadow-purple-500/20">
-              <Image 
-                src="/lilgarg-logo.jpeg" 
-                alt="LilGarg" 
+              <Image
+                src="/lilgarg-logo.jpeg"
+                alt="LilGarg"
                 fill
                 className="object-cover"
               />
             </div>
             <span className="font-space font-bold text-sm text-slate-200 tracking-tight leading-tight">
-              LilGarg<br/><span className="text-purple-500">Vesting</span>
+              LilGarg<br /><span className="text-purple-500">Vesting</span>
             </span>
           </div>
         )}
         {collapsed && (
-           <div className="relative w-10 h-10 rounded-lg overflow-hidden shadow-lg shadow-purple-500/20 mx-auto">
-             <Image 
-                src="/lilgarg-logo.jpeg" 
-                alt="LilGarg" 
-                fill
-                className="object-cover"
-              />
-           </div>
+          <div className="relative w-10 h-10 rounded-lg overflow-hidden shadow-lg shadow-purple-500/20 mx-auto">
+            <Image
+              src="/lilgarg-logo.jpeg"
+              alt="LilGarg"
+              fill
+              className="object-cover"
+            />
+          </div>
         )}
-        
+
         {onMobileClose ? (
           <button
             onClick={onMobileClose}
@@ -154,11 +160,11 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
       {/* Project Selector */}
       <div className={cn("p-4", collapsed && "px-3")}>
         {!collapsed ? (
-           <ProjectSelector />
+          <ProjectSelector />
         ) : (
-           <div className="w-10 h-10 rounded-xl bg-slate-900 mx-auto flex items-center justify-center text-xs font-bold text-slate-400 border border-white/5 cursor-pointer hover:border-purple-500/50 hover:text-purple-400 transition-all">
-             PRJ
-           </div>
+          <div className="w-10 h-10 rounded-xl bg-slate-900 mx-auto flex items-center justify-center text-xs font-bold text-slate-400 border border-white/5 cursor-pointer hover:border-purple-500/50 hover:text-purple-400 transition-all">
+            PRJ
+          </div>
         )}
       </div>
 
@@ -172,8 +178,8 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
               href={item.href}
               className={cn(
                 "flex items-center gap-3 px-3 py-3 rounded-xl transition-all group relative overflow-hidden",
-                isActive 
-                  ? "bg-white/5 text-white font-medium border border-white/5" 
+                isActive
+                  ? "bg-white/5 text-white font-medium border border-white/5"
                   : "text-slate-500 hover:bg-white/[0.02] hover:text-slate-300 border border-transparent"
               )}
             >
@@ -183,11 +189,11 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
               {isActive && (
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-purple-500 rounded-l-xl" />
               )}
-              
+
               <item.icon className={cn("w-5 h-5 flex-shrink-0 relative z-10", isActive ? "text-purple-400" : "text-slate-500 group-hover:text-slate-300")} />
-              
+
               {!collapsed && <span className="relative z-10">{item.label}</span>}
-              
+
               {/* Tooltip for collapsed state */}
               {collapsed && (
                 <div className="absolute left-full ml-4 px-3 py-1.5 bg-slate-900 border border-white/10 rounded-lg text-xs font-medium text-white opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-xl">
@@ -203,11 +209,11 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
       {!collapsed && (
         <div className="px-4 py-4 space-y-2 border-t border-white/5">
           <div className="text-[10px] uppercase tracking-wider text-slate-600 font-semibold mb-2 pl-2">Emergency Controls</div>
-          <button 
+          <button
             onClick={handlePauseResume}
             className={cn(
               "w-full flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors text-xs font-medium",
-              isPaused 
+              isPaused
                 ? "bg-green-500/10 border-green-500/20 text-green-500 hover:bg-green-500/20"
                 : "bg-yellow-500/10 border-yellow-500/20 text-yellow-500 hover:bg-yellow-500/20"
             )}
@@ -215,7 +221,7 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
             {isPaused ? <PlayCircle className="w-4 h-4" /> : <PauseCircle className="w-4 h-4" />}
             {isPaused ? "Resume All Streams" : "Pause All Streams"}
           </button>
-          <button 
+          <button
             onClick={handleEmergencyStop}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500/20 transition-colors text-xs font-medium"
           >
@@ -238,7 +244,7 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
           {!collapsed && <span className="font-medium">Disconnect</span>}
         </button>
       </div>
-      
+
       {/* Toggle button when collapsed */}
       {collapsed && (
         <button
