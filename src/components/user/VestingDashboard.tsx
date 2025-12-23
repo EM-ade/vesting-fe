@@ -8,29 +8,13 @@ import { apiClient } from "@/lib/apiClient";
 import { RetryPrompt } from "@/components/ui/RetryPrompt";
 import { useSimpleClaim } from "@/hooks/useSimpleClaim";
 import { DEMO_WALLET, DEMO_SUMMARY, DEMO_HISTORY } from "@/lib/demoData";
-import { VestingTokenCard } from "./VestingTokenCard";
+import {
+  VestingTokenCard,
+  type Pool,
+  type TokenData,
+} from "./VestingTokenCard";
 
-interface Pool {
-  poolId: string;
-  poolName: string;
-  claimable: number;
-  locked: number;
-  claimed: number;
-  share: number;
-  nftCount: number;
-  status: string;
-}
-
-interface TokenData {
-  tokenMint: string;
-  tokenSymbol: string;
-  totalClaimable: number;
-  totalLocked: number;
-  totalClaimed: number;
-  totalVested: number;
-  nextUnlockTime: number;
-  pools: Pool[];
-}
+// Pool and TokenData interfaces are imported from VestingTokenCard for consistency
 
 interface SummaryData {
   tokens: TokenData[];
@@ -138,6 +122,7 @@ export function VestingDashboard() {
             nftCount: p.nftCount ?? 0,
             status: p.status ?? p.poolState ?? "active",
           })),
+          vestedPercentage: 0, // Default for fallback
         };
 
         setSummary({
