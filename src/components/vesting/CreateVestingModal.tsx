@@ -107,6 +107,8 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [skipStreamflow, setSkipStreamflow] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
+  const [claimFeeUSD, setClaimFeeUSD] = useState<number>(0.50); // Default $0.50
+  const [solPrice, setSolPrice] = useState<number>(200); // Default SOL price, will be fetched
 
   // Token Selection State (Mock for now, simulating multiple tokens)
   const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
@@ -181,6 +183,25 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
       setLoadingTokens(false);
     }
   };
+
+  // Fetch SOL price on component mount
+  useEffect(() => {
+    const fetchSolPrice = async () => {
+      try {
+        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+        const data = await response.json();
+        if (data?.solana?.usd) {
+          setSolPrice(data.solana.usd);
+          console.log('SOL Price fetched:', data.solana.usd);
+        }
+      } catch (error) {
+        console.error('Failed to fetch SOL price:', error);
+        // Keep default $200 if fetch fails
+      }
+    };
+
+    fetchSolPrice();
+  }, []);
 
   useEffect(() => {
     if (open && publicKey) {
@@ -320,7 +341,7 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
       if (currentMode === "manual" && (!manualAllocations.length)) throw new Error("Add at least one wallet");
       if (currentMode !== "manual" && !payloadRules.length) throw new Error("Add at least one rule");
 
-      // 1. Transfer tokens from User Wallet to Project Vault (Treasury)
+      // 1. Transfer tokens + SOL from User Wallet to Project Vault (Treasury)
       // Unless skipping Streamflow (testing mode)
       if (!skipStreamflow && selectedToken) {
         try {
@@ -331,25 +352,70 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
           const { createTransferInstruction, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID } = await import("@solana/spl-token");
 
           const vaultPubkey = new PublicKey(currentProject.vault_public_key);
-          const amountBaseUnits = Math.floor(Number(amount) * Math.pow(10, selectedToken.decimals));
+          // Add 0.5% buffer for Streamflow fees
+          const amountWithBuffer = Number(amount) * 1.005;
+          const amountBaseUnits = Math.floor(amountWithBuffer * Math.pow(10, selectedToken.decimals));
 
-          console.log(`[FUNDING] Preparing to transfer ${amount} ${selectedToken.symbol} (${amountBaseUnits} base units)`);
+          console.log(`[FUNDING] Preparing to transfer ${amount} ${selectedToken.symbol} + 0.5% buffer = ${amountWithBuffer} (${amountBaseUnits} base units)`);
           console.log(`[FUNDING] From: ${publicKey.toBase58()}`);
           console.log(`[FUNDING] To: ${vaultPubkey.toBase58()}`);
 
           const transaction = new Transaction();
 
           if (selectedToken.isNative) {
-            // SOL Transfer
-            console.log(`[FUNDING] Adding SOL transfer instruction`);
+            // For native SOL pools, we need to send:
+            // 1. Pool amount + 0.5% buffer (will be locked in Streamflow)
+            // 2. 0.015 SOL minimum for Streamflow rent + fees (stays in vault)
+            // This ensures vault has enough SOL to pay Streamflow's 0.00025 fee and rent
+            
+            const vaultBalance = await connection.getBalance(vaultPubkey);
+            const vaultBalanceSOL = vaultBalance / LAMPORTS_PER_SOL;
+            const requiredExtraSOL = 0.015; // Streamflow needs this EXTRA to stay in vault
+            
+            // Calculate total SOL to send
+            const poolSOL = amountWithBuffer; // Pool amount with 0.5% buffer (gets locked)
+            const extraSOL = Math.max(0, requiredExtraSOL - vaultBalanceSOL); // Extra for fees (stays in vault)
+            const totalSOL = poolSOL + extraSOL;
+            
+            console.log(`[FUNDING] Native SOL pool - Total transfer: ${totalSOL} SOL`);
+            console.log(`[FUNDING]   - Pool amount + buffer: ${poolSOL} SOL (will be locked in Streamflow)`);
+            console.log(`[FUNDING]   - Extra for Streamflow fees: ${extraSOL} SOL (stays in vault for rent/fees)`);
+            console.log(`[FUNDING]   - Vault current balance: ${vaultBalanceSOL} SOL`);
+            
+            updateStatus(`💰 Funding treasury with ${totalSOL.toFixed(4)} SOL (pool + deployment fees)...`);
+            
             transaction.add(
               SystemProgram.transfer({
                 fromPubkey: publicKey,
                 toPubkey: vaultPubkey,
-                lamports: amountBaseUnits,
+                lamports: Math.ceil(totalSOL * LAMPORTS_PER_SOL),
               })
             );
           } else {
+            // For SPL tokens, check if we need to add SOL for Streamflow deployment fees
+            try {
+              const vaultBalance = await connection.getBalance(vaultPubkey);
+              const vaultBalanceSOL = vaultBalance / LAMPORTS_PER_SOL;
+              const requiredSOL = 0.015;
+              
+              console.log(`[FUNDING] Vault SOL balance: ${vaultBalanceSOL} SOL`);
+              
+              if (vaultBalanceSOL < requiredSOL) {
+                const solToSend = requiredSOL - vaultBalanceSOL;
+                console.log(`[FUNDING] Adding SOL transfer: ${solToSend} SOL`);
+                updateStatus(`💰 Funding treasury with ${solToSend.toFixed(4)} SOL for deployment fees...`);
+                
+                transaction.add(
+                  SystemProgram.transfer({
+                    fromPubkey: publicKey,
+                    toPubkey: vaultPubkey,
+                    lamports: Math.ceil(solToSend * LAMPORTS_PER_SOL),
+                  })
+                );
+              }
+            } catch (solCheckErr) {
+              console.warn('[FUNDING] Failed to check vault SOL balance, proceeding without SOL transfer:', solCheckErr);
+            }
             // SPL Token Transfer
             const mintPubkey = new PublicKey(selectedToken.mint);
             console.log(`[FUNDING] Token mint: ${mintPubkey.toBase58()}`);
@@ -422,6 +488,11 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
 
       updateStatus(`📦 Creating vesting pool...`);
 
+      // Validate token selection before creating pool
+      if (!selectedToken) {
+        throw new Error('Please select a token in Step 1 before creating the pool');
+      }
+
       await api.post("/pools", {
         name: poolName || `Vesting - ${new Date().toLocaleDateString()}`,
         total_pool_amount: Number(amount),
@@ -438,7 +509,8 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
           allocationValue: a.allocationValue
         })) : undefined,
         skipStreamflow,
-        token_mint: selectedToken?.mint,
+        token_mint: selectedToken.mint, // Now guaranteed to exist
+        claim_fee_lamports: Math.floor((claimFeeUSD / solPrice) * LAMPORTS_PER_SOL), // Convert USD to lamports
       });
 
       updateStatus(`✨ Pool created successfully!`);
@@ -658,6 +730,85 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
                 />
               </div>
               <p className="text-xs text-slate-500 mt-2">Tokens remain fully locked until this date, then unlock linearly.</p>
+            </div>
+
+            {/* Claim Fee Configuration */}
+            <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+                  <Coins className="w-4 h-4 text-purple-400" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-white mb-1">Pool Claim Fee</h4>
+                  <p className="text-xs text-slate-400">
+                    Additional fee charged to users when claiming from this pool. This fee goes to your project vault 
+                    <span className="text-purple-400 font-medium"> (on top of platform fees)</span>.
+                  </p>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Fee Amount (USD)</label>
+                  <div className="relative">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-500">
+                      $
+                    </div>
+                    <input
+                      type="number"
+                      step="0.10"
+                      min="0"
+                      value={claimFeeUSD}
+                      onChange={(e) => setClaimFeeUSD(Number(e.target.value))}
+                      className="w-full bg-slate-900 border border-white/10 rounded-xl pl-8 pr-16 py-3 text-white placeholder:text-slate-600 focus:border-purple-500/50 focus:outline-none font-mono"
+                      placeholder="0.50"
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-500">
+                      USD
+                    </div>
+                  </div>
+                  <div className="mt-2 p-2 bg-slate-900/50 rounded-lg border border-slate-700/50">
+                    <p className="text-xs text-slate-400">
+                      <span className="font-medium text-white">Current pool fee:</span> ${claimFeeUSD.toFixed(2)} USD
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      ≈ {(claimFeeUSD / solPrice).toFixed(4)} SOL <span className="text-slate-600">(at ${solPrice}/SOL)</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quick presets */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setClaimFeeUSD(0.25)}
+                    className="flex-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-white/10 rounded-lg text-xs text-white transition-colors"
+                  >
+                    $0.25
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClaimFeeUSD(0.50)}
+                    className="flex-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-white/10 rounded-lg text-xs text-white transition-colors"
+                  >
+                    $0.50
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClaimFeeUSD(1.00)}
+                    className="flex-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-white/10 rounded-lg text-xs text-white transition-colors"
+                  >
+                    $1.00
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClaimFeeUSD(2.00)}
+                    className="flex-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-white/10 rounded-lg text-xs text-white transition-colors"
+                  >
+                    $2.00
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -946,6 +1097,30 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
               {activeStep === 4 && (
                 <>
                   <p>Review your configuration carefully.</p>
+                  
+                  {!skipStreamflow && (
+                    <div className="flex items-start gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-blue-200 text-xs mb-3">
+                      <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-semibold mb-1">Treasury Funding Required</p>
+                        <p className="mb-2">You will be asked to fund the treasury with:</p>
+                        {selectedToken?.isNative ? (
+                          <ul className="list-disc list-inside space-y-1 ml-2">
+                            <li><span className="font-mono font-bold">{amount ? (Number(amount) * 1.005).toLocaleString() : '0'} SOL</span> (pool + 0.25% Streamflow fee + 0.25% buffer)</li>
+                            <li><span className="font-mono font-bold">+0.015 SOL</span> (rent deposit for Streamflow deployment)</li>
+                            <li className="font-semibold text-blue-300">Total: {amount ? ((Number(amount) * 1.005) + 0.015).toFixed(4) : '0'} SOL</li>
+                          </ul>
+                        ) : (
+                          <ul className="list-disc list-inside space-y-1 ml-2">
+                            <li><span className="font-mono font-bold">{amount ? (Number(amount) * 1.005).toLocaleString() : '0'}</span> tokens (pool + 0.25% Streamflow fee + 0.25% buffer)</li>
+                            <li><span className="font-mono font-bold">~0.015 SOL</span> (rent deposit for Streamflow deployment)</li>
+                          </ul>
+                        )}
+                        <p className="mt-2 text-slate-400 italic">The 0.5% extra covers Streamflow&apos;s 0.25% protocol fee plus a safety buffer.</p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-start gap-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-200 text-xs">
                     <Info className="w-4 h-4 flex-shrink-0" />
                     Once created, snapshot pools cannot be modified. Dynamic rules can be adjusted later.

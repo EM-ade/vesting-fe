@@ -19,6 +19,8 @@ interface ProjectContextType {
   projects: Project[];
   switchProject: (projectId: string) => void;
   refreshProjects: () => Promise<void>;
+  refreshData: () => void;
+  dataRefreshKey: number;
   isLoading: boolean;
 }
 
@@ -37,6 +39,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [dataRefreshKey, setDataRefreshKey] = useState(0);
 
   // Load cached data on mount for instant display
   useEffect(() => {
@@ -139,11 +142,14 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         // Cache for instant display on next load
         localStorage.setItem('cachedProject', JSON.stringify(project));
       }
-      // Force a reload to clear any stale state in other components if necessary
-      // window.location.reload(); 
-      // Better to let React Context handle updates, but API calls need to pick up new ID.
+      // Trigger data refresh when switching projects
+      setDataRefreshKey(prev => prev + 1);
     }
   };
+
+  const refreshData = useCallback(() => {
+    setDataRefreshKey(prev => prev + 1);
+  }, []);
 
   return (
     <ProjectContext.Provider value={{
@@ -151,6 +157,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       projects,
       switchProject,
       refreshProjects,
+      refreshData,
+      dataRefreshKey,
       isLoading
     }}>
       {children}

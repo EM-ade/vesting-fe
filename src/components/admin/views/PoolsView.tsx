@@ -219,6 +219,7 @@ export function PoolsView() {
                   pool={pool}
                   onClick={() => handlePoolClick(pool)}
                   onCancel={() => confirmCancelPool(pool.id)}
+                  onRefresh={loadPools}
                 />
               ))}
 
@@ -272,14 +273,16 @@ export function PoolsView() {
   );
 }
 
-function PoolRow({ pool, onClick, onCancel }: { pool: Pool, onClick: () => void, onCancel: () => void }) {
-  const percentage = pool.streamflow?.vestedPercentage || 0;
+function PoolRow({ pool, onClick, onCancel, onRefresh }: { pool: Pool, onClick: () => void, onCancel: () => void, onRefresh: () => Promise<void> }) {
+  // Allocation progress: show number of users allocated
+  const userCount = pool.stats?.userCount || 0;
+  const hasAllocations = userCount > 0;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [pauseLoading, setPauseLoading] = useState(false);
 
   // Check if pool has started
   const poolStarted = pool.start_time ? new Date(pool.start_time) <= new Date() : false;
-  const isPaused = pool.is_active === false;
+  const isPaused = pool.state === 'paused';
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -299,8 +302,10 @@ function PoolRow({ pool, onClick, onCancel }: { pool: Pool, onClick: () => void,
       await api.patch(`/admin/pool/${pool.id}/state`, {
         action: isPaused ? 'resume' : 'pause'
       });
-      // Refresh the pool list
-      window.location.reload();
+      // Refresh only the pools data, not the entire page
+      if (onRefresh) {
+        await onRefresh();
+      }
     } catch (error) {
       console.error('Failed to toggle pool state:', error);
     } finally {
@@ -349,12 +354,12 @@ function PoolRow({ pool, onClick, onCancel }: { pool: Pool, onClick: () => void,
         <div className="flex flex-col gap-1.5">
           <div className="flex justify-between text-xs">
             <span className="font-mono text-slate-400">{formatTokenAmount(pool.totalAmount)}</span>
-            <span className="text-slate-500">{percentage}%</span>
+            <span className="text-slate-500">{userCount} users</span>
           </div>
           <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
             <div
               className="h-full bg-purple-500 rounded-full transition-all duration-500"
-              style={{ width: `${percentage}%` }}
+              style={{ width: `${hasAllocations ? 100 : 0}%` }}
             />
           </div>
         </div>

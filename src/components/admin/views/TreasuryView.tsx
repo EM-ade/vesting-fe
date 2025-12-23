@@ -2,25 +2,32 @@
 
 import { useState } from "react";
 import { TreasuryWidget } from "@/components/dashboard/TreasuryWidget";
-import { ClaimsPolicyPanel } from "@/components/dashboard/ClaimsPolicyPanel";
 import { WithdrawModal } from "@/components/admin/modals/WithdrawModal";
+import { CreateVestingModal } from "@/components/vesting/CreateVestingModal";
 import { Button } from "@/components/ui/Button";
-import { ArrowDownToLine } from "lucide-react";
+import { ArrowDownToLine, BookOpen, Plus } from "lucide-react";
 import { useProject } from "@/contexts/ProjectContext";
 
 import { OnboardingModal } from "@/components/admin/OnboardingModal";
-import { BookOpen } from "lucide-react";
 
 export function TreasuryView() {
   const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
-  const { currentProject } = useProject();
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const { currentProject, refreshData } = useProject();
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold font-space text-white">Treasury & Policies</h1>
+        <h1 className="text-3xl font-bold font-space text-white">Treasury</h1>
         <div className="flex gap-2">
+          <Button
+            onClick={() => setCreateModalOpen(true)}
+            className="bg-purple-500 hover:bg-purple-600 text-white"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Create Pool
+          </Button>
           <Button
             variant="outline"
             onClick={() => setOnboardingOpen(true)}
@@ -31,7 +38,7 @@ export function TreasuryView() {
           </Button>
           <Button
             onClick={() => setWithdrawModalOpen(true)}
-            className="bg-purple-500 hover:bg-purple-600"
+            className="bg-gray-600 hover:bg-gray-700"
           >
             <ArrowDownToLine className="w-4 h-4 mr-2" />
             Withdraw Tokens
@@ -39,9 +46,8 @@ export function TreasuryView() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="w-full">
         <TreasuryWidget />
-        <ClaimsPolicyPanel />
       </div>
 
       {currentProject && (
@@ -59,6 +65,16 @@ export function TreasuryView() {
             isOpen={onboardingOpen}
             onClose={() => setOnboardingOpen(false)}
             autoShow={false}
+          />
+          <CreateVestingModal
+            open={createModalOpen}
+            onClose={() => setCreateModalOpen(false)}
+            mode="snapshot"
+            onModeChange={() => {}}
+            onSuccess={() => {
+              setCreateModalOpen(false);
+              refreshData();
+            }}
           />
         </>
       )}
