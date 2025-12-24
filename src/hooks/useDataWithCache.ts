@@ -50,7 +50,14 @@ export function useDataWithCache<T>(
 
     setLoading(true);
     try {
-      const result = await fetcher();
+      // Add 30-second timeout to prevent infinite hangs
+      const TIMEOUT_MS = 30000;
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Request timed out after 30 seconds. Please check your connection and try again.')), TIMEOUT_MS)
+      );
+
+      const result = await Promise.race([fetcher(), timeoutPromise]);
+      
       cacheStore[key] = {
         data: result,
         timestamp: Date.now(),
@@ -58,7 +65,16 @@ export function useDataWithCache<T>(
       setData(result);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err : new Error("Unknown error"));
+      const error = err instanceof Error ? err : new Error("Unknown error");
+      console.error(`Failed to fetch data for key ${key}:`, error);
+      setError(error);
+      
+      // Keep stale data if available (better than nothing)
+      if (!data && cacheStore[key]) {
+        const staleData = cacheStore[key].data as T;
+        setData(staleData);
+        console.warn(`Using stale data for key ${key} due to fetch error`);
+      }
     } finally {
       setLoading(false);
     }

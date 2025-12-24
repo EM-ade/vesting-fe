@@ -177,28 +177,41 @@ export function TreasuryWidget() {
 
   async function fetchTreasuryStatus() {
     try {
+      setLoading(true);
       setError(null);
-      const data = await api.get<TreasuryStatus>(
+      
+      // Add timeout to prevent infinite hangs
+      const TIMEOUT_MS = 30000; // 30 seconds
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Treasury data took too long to load. Please check your connection and try again.')), TIMEOUT_MS)
+      );
+
+      const fetchPromise = api.get<TreasuryStatus>(
         `/treasury/status${
           currentProject?.id ? `?projectId=${currentProject.id}` : ""
         }`
       );
+
+      const data = await Promise.race([fetchPromise, timeoutPromise]);
       setTreasuryStatus(data);
 
-      // Also fetch available balance for withdrawal (for selected token)
+      // Also fetch available balance for withdrawal (for selected token) - non-blocking
       if (currentProject?.id) {
         const tokenParam = withdrawTokenMint
           ? `&tokenMint=${withdrawTokenMint}`
           : "";
-        const balance = await api.get<AvailableBalance>(
+        api.get<AvailableBalance>(
           `/treasury/available?projectId=${currentProject.id}${tokenParam}`
-        );
-        setBalanceInfo(balance);
+        )
+        .then(balance => setBalanceInfo(balance))
+        .catch(err => {
+          console.warn('Failed to fetch available balance:', err);
+        });
       }
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to fetch treasury status"
-      );
+      const errorMessage = err instanceof Error ? err.message : "Failed to fetch treasury status";
+      setError(errorMessage);
+      console.error('Treasury status fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -296,22 +309,59 @@ export function TreasuryWidget() {
     }
   };
 
-  if (loading) {
+  // Show loading skeleton while fetching (but not if we have stale data)
+  if (loading && !treasuryStatus) {
     return (
-      <div className="bg-slate-950 border border-white/10 rounded-xl p-6 animate-pulse h-[400px]" />
+      <div className="bg-slate-950 border border-white/10 rounded-xl p-6 space-y-6">
+        {/* Header skeleton */}
+        <div className="flex items-center justify-between">
+          <div className="h-6 w-40 bg-white/5 rounded animate-pulse" />
+          <div className="h-8 w-8 bg-white/5 rounded animate-pulse" />
+        </div>
+        
+        {/* Metrics skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="bg-white/5 rounded-lg p-4 space-y-3">
+              <div className="h-4 w-24 bg-white/10 rounded animate-pulse" />
+              <div className="h-8 w-32 bg-white/10 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+        
+        {/* Chart skeleton */}
+        <div className="h-48 bg-white/5 rounded-lg animate-pulse" />
+        
+        <p className="text-center text-white/40 text-xs">Loading treasury data...</p>
+      </div>
     );
   }
 
+  // Show error state with retry option
   if (error || !treasuryStatus) {
     return (
-      <div className="bg-slate-950 border border-red-500/20 rounded-xl p-6 flex flex-col items-center justify-center text-center">
-        <AlertTriangle className="w-10 h-10 text-red-500 mb-4" />
-        <p className="text-red-400 mb-4">
-          {error || "Failed to load treasury status"}
+      <div className="bg-slate-950 border border-red-500/20 rounded-xl p-8 text-center">
+        <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-white mb-2">Failed to Load Treasury</h3>
+        <p className="text-white/60 mb-6 max-w-md mx-auto text-sm">
+          {error || "Unable to fetch treasury status. This may be due to network issues or RPC timeout."}
         </p>
-        <Button variant="outline" size="sm" onClick={fetchTreasuryStatus}>
-          Retry Connection
-        </Button>
+        <div className="flex gap-3 justify-center">
+          <Button variant="outline" size="sm" onClick={fetchTreasuryStatus}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Retry
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => window.location.reload()}
+          >
+            Reload Page
+          </Button>
+        </div>
+        <p className="text-xs text-white/40 mt-4">
+          Tip: Treasury data requires blockchain queries which may take longer on slow connections.
+        </p>
       </div>
     );
   }

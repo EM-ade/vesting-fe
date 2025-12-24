@@ -16,12 +16,15 @@ import {
   AlertOctagon,
   X,
   PlayCircle,
-  FileText
+  FileText,
+  Copy,
+  Check
 } from "lucide-react";
 import ProjectSelector from "../ProjectSelector";
 import Image from "next/image";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { useProject } from "@/contexts/ProjectContext";
 
 type AdminSidebarProps = {
   collapsed: boolean;
@@ -33,8 +36,10 @@ type AdminSidebarProps = {
 export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose }: AdminSidebarProps) {
   const pathname = usePathname();
   const { disconnect, publicKey, signMessage } = useWallet();
+  const { currentProject } = useProject();
   const [isPaused, setIsPaused] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const signAndCall = async (endpoint: string, successMessage: string) => {
     if (!publicKey || !signMessage) {
@@ -86,6 +91,25 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
     if (!confirm("CRITICAL WARNING: This will permanently stop ALL vesting streams. This action is irreversible. Are you sure?")) return;
     
     await signAndCall("/stream/emergency-stop", "Emergency stop executed. All streams cancelled.");
+  };
+
+  const handleCopyTreasuryKey = async () => {
+    if (!currentProject?.vault_public_key) {
+      toast.error("No treasury key available");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(currentProject.vault_public_key);
+      setCopied(true);
+      toast.success("Treasury key copied to clipboard");
+      
+      // Reset copied state after 2 seconds
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+      toast.error("Failed to copy treasury key");
+    }
   };
 
   const navItems = [
@@ -154,7 +178,33 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
       {/* Project Selector */}
       <div className={cn("p-4", collapsed && "px-3")}>
         {!collapsed ? (
-           <ProjectSelector />
+           <>
+             <ProjectSelector />
+             
+             {/* Treasury Public Key */}
+             {currentProject?.vault_public_key && (
+               <button
+                 onClick={handleCopyTreasuryKey}
+                 className="mt-3 w-full px-3 py-2 rounded-lg bg-slate-900/50 border border-white/5 hover:border-purple-500/30 hover:bg-slate-900 transition-all group"
+               >
+                 <div className="flex items-center justify-between gap-2">
+                   <div className="flex-1 min-w-0">
+                     <div className="text-xs text-slate-400 mb-1">Treasury Key</div>
+                     <div className="text-xs font-mono text-slate-300 truncate">
+                       {currentProject.vault_public_key.slice(0, 8)}...{currentProject.vault_public_key.slice(-8)}
+                     </div>
+                   </div>
+                   <div className="flex-shrink-0">
+                     {copied ? (
+                       <Check className="w-4 h-4 text-green-400" />
+                     ) : (
+                       <Copy className="w-4 h-4 text-slate-400 group-hover:text-purple-400 transition-colors" />
+                     )}
+                   </div>
+                 </div>
+               </button>
+             )}
+           </>
         ) : (
            <div className="w-10 h-10 rounded-xl bg-slate-900 mx-auto flex items-center justify-center text-xs font-bold text-slate-400 border border-white/5 cursor-pointer hover:border-purple-500/50 hover:text-purple-400 transition-all">
              PRJ

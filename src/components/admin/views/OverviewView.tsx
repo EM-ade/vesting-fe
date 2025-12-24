@@ -145,7 +145,7 @@ export function OverviewView() {
   const cacheKey = `dashboard-${currentProject?.id}-${selectedPoolIds.join(
     ","
   )}-${dataRefreshKey}`;
-  const { data, loading, refresh } = useDataWithCache<DashboardData>(
+  const { data, loading, error, refresh } = useDataWithCache<DashboardData>(
     cacheKey,
     fetchData,
     { ttl: 30000 } // 30s cache
@@ -156,8 +156,43 @@ export function OverviewView() {
     value: p.id.toString(),
   }));
 
+  // ALWAYS show skeleton during initial load (no data yet)
   if (loading && !data) {
     return <DashboardSkeleton />;
+  }
+
+  // Show error state with retry if load failed and no cached data
+  if (error && !data) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[500px] gap-4 px-4">
+        <div className="text-center max-w-md space-y-4">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h3 className="text-xl font-bold text-white">Failed to Load Dashboard</h3>
+          <p className="text-white/60 text-sm leading-relaxed">
+            {error.message || "Unable to fetch dashboard data. This may be due to a slow network connection or server timeout."}
+          </p>
+          <div className="flex gap-3 justify-center mt-6">
+            <Button 
+              onClick={refresh} 
+              className="bg-purple-500 hover:bg-purple-600"
+            >
+              <ArrowUpRight className="w-4 h-4 mr-2" />
+              Retry
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => window.location.reload()}
+              className="border-white/10 hover:bg-white/5"
+            >
+              Reload Page
+            </Button>
+          </div>
+          <p className="text-xs text-white/40 mt-4">
+            Tip: Check your internet connection or try refreshing in a few moments.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   const metrics = data?.metrics;

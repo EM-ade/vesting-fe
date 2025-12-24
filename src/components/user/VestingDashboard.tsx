@@ -28,6 +28,7 @@ interface TokenData {
   totalLocked: number;
   totalClaimed: number;
   totalVested: number;
+  vestedPercentage: number; // Percentage of tokens that have vested (0-100)
   nextUnlockTime: number;
   pools: Pool[];
 }
@@ -88,11 +89,17 @@ export function VestingDashboard() {
       // For now, sticking to a basic cast or simple mock transformation if DEMO_SUMMARY is old
       // Assuming DEMO_SUMMARY is updated or we handle it.
       // Let's create a mock structure if DEMO_SUMMARY is old style
+      const totalAllocation = (DEMO_SUMMARY.totalClaimable || 0) + (DEMO_SUMMARY.totalLocked || 0) + (DEMO_SUMMARY.totalClaimed || 0);
+      const vestedPercentage = totalAllocation > 0 
+        ? Math.min(100, Math.round(((DEMO_SUMMARY.totalVested || 0) / totalAllocation) * 100))
+        : 0;
+      
       const mockTokens = [
         {
           tokenMint: "MockMint123",
           tokenSymbol: "$GARG",
           ...DEMO_SUMMARY,
+          vestedPercentage,
         },
       ];
       setSummary({ ...DEMO_SUMMARY, tokens: mockTokens } as any);
@@ -120,13 +127,25 @@ export function VestingDashboard() {
       // If response lacks 'tokens' but has 'pools', wrap it in a default token
       const anyResponse = response as any;
       if (anyResponse && !anyResponse.tokens && anyResponse.pools) {
+        const totalClaimable = anyResponse.totalClaimable || 0;
+        const totalLocked = anyResponse.totalLocked || 0;
+        const totalClaimed = anyResponse.totalClaimed || 0;
+        const totalVested = anyResponse.totalVested || 0;
+        
+        // Calculate vested percentage: (vested / total allocation) * 100
+        const totalAllocation = totalClaimable + totalLocked + totalClaimed;
+        const vestedPercentage = totalAllocation > 0 
+          ? Math.min(100, Math.round((totalVested / totalAllocation) * 100))
+          : 0;
+        
         const defaultToken: TokenData = {
           tokenMint: "default-garg-mint",
           tokenSymbol: "$GARG",
-          totalClaimable: anyResponse.totalClaimable || 0,
-          totalLocked: anyResponse.totalLocked || 0,
-          totalClaimed: anyResponse.totalClaimed || 0,
-          totalVested: anyResponse.totalVested || 0,
+          totalClaimable,
+          totalLocked,
+          totalClaimed,
+          totalVested,
+          vestedPercentage,
           nextUnlockTime: anyResponse.nextUnlockTime || 0,
           pools: anyResponse.pools.map((p: any) => ({
             poolId: p.poolId,
