@@ -8,13 +8,29 @@ import { apiClient } from "@/lib/apiClient";
 import { RetryPrompt } from "@/components/ui/RetryPrompt";
 import { useSimpleClaim } from "@/hooks/useSimpleClaim";
 import { DEMO_WALLET, DEMO_SUMMARY, DEMO_HISTORY } from "@/lib/demoData";
-import {
-  VestingTokenCard,
-  type Pool,
-  type TokenData,
-} from "./VestingTokenCard";
+import { VestingTokenCard } from "./VestingTokenCard";
 
-// Pool and TokenData interfaces are imported from VestingTokenCard for consistency
+interface Pool {
+  poolId: string;
+  poolName: string;
+  claimable: number;
+  locked: number;
+  claimed: number;
+  share: number;
+  nftCount: number;
+  status: string;
+}
+
+interface TokenData {
+  tokenMint: string;
+  tokenSymbol: string;
+  totalClaimable: number;
+  totalLocked: number;
+  totalClaimed: number;
+  totalVested: number;
+  nextUnlockTime: number;
+  pools: Pool[];
+}
 
 interface SummaryData {
   tokens: TokenData[];
@@ -122,7 +138,6 @@ export function VestingDashboard() {
             nftCount: p.nftCount ?? 0,
             status: p.status ?? p.poolState ?? "active",
           })),
-          vestedPercentage: 0, // Default for fallback
         };
 
         setSummary({
@@ -264,11 +279,9 @@ export function VestingDashboard() {
     }).format(date);
   };
 
-  // Skeleton loader component matching DashboardSkeleton pattern
+  // Skeleton loader component
   const SkeletonLoader = ({ height = "h-12" }: { height?: string }) => (
-    <div
-      className={`${height} animate-pulse rounded-xl bg-slate-800/50 border border-white/5`}
-    />
+    <div className={`${height} animate-pulse rounded-lg bg-white/10`} />
   );
 
   return (

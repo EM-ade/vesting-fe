@@ -213,36 +213,11 @@ export function useClaimWithFee() {
         setStatus("success");
         console.log("[CLAIM] Claim completed successfully:", completeResponse);
         return completeResponse;
-      } catch (err: any) {
-        console.error("[CLAIM] Error:", err);
-
-        let customError =
+      } catch (err) {
+        const error =
           err instanceof Error ? err : new Error("Failed to execute claim");
-
-        // Parse common Solana errors
-        const msg = customError.message.toLowerCase();
-        if (msg.includes("user rejected") || msg.includes("user cancelled")) {
-          customError = new Error("Transaction cancelled by user");
-        } else if (
-          msg.includes("0x1") ||
-          msg.includes("insufficient lamports") ||
-          msg.includes("insufficient funds")
-        ) {
-          customError = new Error(
-            "Insufficient SOL balance for transaction fees"
-          );
-        } else if (msg.includes("blockhash not found")) {
-          customError = new Error(
-            "Network busy. Please try again (Blockhash expired)"
-          );
-        } else if (msg.includes("simulation failed")) {
-          // Try to extract logs or reason if available
-          customError = new Error(
-            "Transaction simulation failed. This might be due to insufficient funds or network issues."
-          );
-        }
-
-        setError(customError);
+        console.error("[CLAIM] Error:", error);
+        setError(error);
         setStatus("error");
         setProgress(0);
         return null;

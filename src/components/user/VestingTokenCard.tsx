@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { CircularProgress } from "@/components/ui/CircularProgress";
 import { ChevronDown } from "lucide-react";
 
-export interface Pool {
+interface Pool {
   poolId: string;
   poolName: string;
   claimable: number;
@@ -13,14 +13,14 @@ export interface Pool {
   status: string;
 }
 
-export interface TokenData {
+interface TokenData {
   tokenMint: string;
   tokenSymbol: string;
   totalClaimable: number;
   totalLocked: number;
   totalClaimed: number;
   totalVested: number;
-  vestedPercentage?: number; // Calculated by components if missing
+  vestedPercentage: number; // You might need to calculate this or get from backend
   nextUnlockTime: number;
   pools: Pool[];
 }
