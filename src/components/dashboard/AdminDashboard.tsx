@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useProject } from "@/contexts/ProjectContext";
 import { usePathname } from "next/navigation";
@@ -14,6 +15,36 @@ export function AdminDashboard() {
   const { currentProject } = useProject();
   const pathname = usePathname();
 
+  // IMPORTANT: All hooks must be called before any conditional returns
+  // Route-based view switching with content retention
+  const [currentView, setCurrentView] = React.useState<React.ReactNode>(<OverviewView />);
+  const [isTransitioning, setIsTransitioning] = React.useState(false);
+
+  React.useEffect(() => {
+    // Determine new content based on pathname
+    let newContent: React.ReactNode;
+    
+    if (pathname === "/admin/pools") {
+      newContent = <PoolsView />;
+    } else if (pathname === "/admin/treasury") {
+      newContent = <TreasuryView />;
+    } else if (pathname === "/admin/claims") {
+      newContent = <ClaimsManagementView />;
+    } else {
+      newContent = <OverviewView />;
+    }
+
+    // Brief transition to prevent jarring switches
+    setIsTransitioning(true);
+    const timer = setTimeout(() => {
+      setCurrentView(newContent);
+      setIsTransitioning(false);
+    }, 50); // Very brief delay to avoid flash
+
+    return () => clearTimeout(timer);
+  }, [pathname]);
+
+  // Conditional returns AFTER all hooks
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-4">
@@ -50,22 +81,12 @@ export function AdminDashboard() {
     );
   }
 
-  // Route-based view switching
-  // Default to Overview
-  let content = <OverviewView />;
-  
-  if (pathname === "/admin/pools") {
-    content = <PoolsView />;
-  } else if (pathname === "/admin/treasury") {
-    content = <TreasuryView />;
-  } else if (pathname === "/admin/claims") {
-    content = <ClaimsManagementView />;
-  }
-
   return (
     <>
       <OnboardingModal />
-      {content}
+      <div className={isTransitioning ? "opacity-95" : "opacity-100 transition-opacity duration-150"}>
+        {currentView}
+      </div>
     </>
   );
 }

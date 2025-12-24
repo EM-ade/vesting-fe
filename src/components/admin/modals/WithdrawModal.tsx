@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { api } from "@/lib/api";
-import { AlertCircle, Wallet, ArrowRight } from "lucide-react";
+import { AlertCircle, Wallet, ArrowRight, ExternalLink, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface WithdrawModalProps {
     open: boolean;
@@ -41,6 +42,7 @@ export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawM
     const [loading, setLoading] = useState(false);
     const [balanceLoading, setBalanceLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [successData, setSuccessData] = useState<{ signature: string; amount: number; recipient: string } | null>(null);
     const [balanceInfo, setBalanceInfo] = useState<AvailableBalance | null>(null);
 
     // Load available tokens when modal opens
@@ -97,6 +99,7 @@ export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawM
 
         setLoading(true);
         setError(null);
+        setSuccessData(null);
 
         try {
             const token = availableTokens.find(t => t.mint === selectedToken);
@@ -107,22 +110,57 @@ export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawM
                 ? `/treasury/withdraw-sol?projectId=${projectId}`
                 : `/treasury/withdraw?projectId=${projectId}`;
             
-            await api.post(endpoint, {
+            const response = await api.post<{ 
+                success: boolean; 
+                signature: string; 
+                amount: number; 
+                recipient: string;
+                message?: string;
+            }>(endpoint, {
                 amount: parseFloat(amount),
                 recipientAddress,
                 note,
                 tokenMint: isSOL ? undefined : selectedToken, // Only send tokenMint for SPL tokens
             });
 
-            if (onSuccess) onSuccess();
-            onClose();
+            // Show success state with transaction signature
+            setSuccessData({
+                signature: response.signature,
+                amount: parseFloat(amount),
+                recipient: recipientAddress
+            });
+
+            // Show toast notification with Solscan link
+            const selectedTokenData = availableTokens.find(t => t.mint === selectedToken);
+            const solscanUrl = getSolscanUrl(response.signature);
+            
+            toast.success("Withdrawal Successful", {
+                description: `Transferred ${parseFloat(amount)} ${selectedTokenData?.symbol || 'tokens'} to ${recipientAddress.slice(0, 8)}...${recipientAddress.slice(-8)}`,
+                action: {
+                    label: "View on Solscan",
+                    onClick: () => window.open(solscanUrl, '_blank')
+                },
+                duration: 10000, // Show for 10 seconds
+            });
+
+            // Call onSuccess callback after a brief moment to show the success state
+            setTimeout(() => {
+                if (onSuccess) onSuccess();
+            }, 500);
 
             // Reset form
             setAmount("");
             setRecipientAddress("");
             setNote("");
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Withdrawal failed");
+            const errorMessage = err instanceof Error ? err.message : "Withdrawal failed";
+            setError(errorMessage);
+            
+            // Also show error toast
+            toast.error("Withdrawal Failed", {
+                description: errorMessage,
+                duration: 5000,
+            });
         } finally {
             setLoading(false);
         }
@@ -137,9 +175,57 @@ export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawM
     const selectedTokenData = availableTokens.find(t => t.mint === selectedToken);
     const isSOL = selectedTokenData?.symbol === 'SOL';
 
+    // Helper to determine network from RPC URL
+    const getSolscanUrl = (signature: string): string => {
+        const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || '';
+        
+        // Detect network from RPC URL
+        if (rpcUrl.includes('mainnet')) {
+            return `https://solscan.io/tx/${signature}`;
+        } else if (rpcUrl.includes('devnet')) {
+            return `https://solscan.io/tx/${signature}?cluster=devnet`;
+        } else if (rpcUrl.includes('testnet')) {
+            return `https://solscan.io/tx/${signature}?cluster=testnet`;
+        } else {
+            // Default to devnet based on .env file
+            return `https://solscan.io/tx/${signature}?cluster=devnet`;
+        }
+    };
+
+    const handleClose = () => {
+        setSuccessData(null);
+        setError(null);
+        onClose();
+    };
+
     return (
-        <Modal open={open} onClose={onClose} title="Withdraw from Vault">
+        <Modal open={open} onClose={handleClose} title="Withdraw from Vault">
             <div className="space-y-6">
+                {/* Success Alert with Solscan Link */}
+                {successData && (
+                    <div className="flex flex-col gap-3 p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
+                        <div className="flex items-start gap-2 text-green-200">
+                            <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                                <div className="font-semibold mb-1">Withdrawal Successful!</div>
+                                <div className="text-sm text-green-200/80">
+                                    Transferred {successData.amount} tokens to{' '}
+                                    <span className="font-mono text-xs">{successData.recipient.slice(0, 8)}...{successData.recipient.slice(-8)}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <a
+                            href={getSolscanUrl(successData.signature)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center gap-2 px-4 py-2 bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 rounded-lg text-green-200 text-sm font-medium transition-colors"
+                        >
+                            <ExternalLink className="w-4 h-4" />
+                            View on Solscan
+                        </a>
+                    </div>
+                )}
+
                 {/* Token Selector */}
                 <div>
                     <label className="block text-sm text-white/60 mb-2">Select Token</label>
@@ -256,18 +342,37 @@ export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawM
 
                 {/* Actions */}
                 <div className="flex justify-end gap-2 pt-4 border-t border-white/5">
-                    <Button variant="ghost" onClick={onClose} disabled={loading}>
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={handleWithdraw}
-                        loading={loading}
-                        disabled={!amount || !recipientAddress || (!isSOL && balanceInfo ? parseFloat(amount) > balanceInfo.available : false)}
-                        className="bg-purple-500 hover:bg-purple-600"
-                    >
-                        Withdraw Tokens
-                        <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
+                    {!successData ? (
+                        <>
+                            <Button variant="ghost" onClick={handleClose} disabled={loading}>
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={handleWithdraw}
+                                disabled={loading || !amount || !recipientAddress || (!isSOL && balanceInfo ? parseFloat(amount) > balanceInfo.available : false)}
+                                className="bg-purple-500 hover:bg-purple-600"
+                            >
+                                {loading ? (
+                                    <span className="flex items-center gap-2">
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                        Processing...
+                                    </span>
+                                ) : (
+                                    <>
+                                        Withdraw Tokens
+                                        <ArrowRight className="w-4 h-4 ml-2" />
+                                    </>
+                                )}
+                            </Button>
+                        </>
+                    ) : (
+                        <Button
+                            onClick={handleClose}
+                            className="bg-green-600 hover:bg-green-700 w-full"
+                        >
+                            Close
+                        </Button>
+                    )}
                 </div>
             </div>
         </Modal>

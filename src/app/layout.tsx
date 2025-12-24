@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Manrope } from 'next/font/google';
 import { Analytics } from "@vercel/analytics/react";
+import { Toaster } from "sonner";
 import AppWalletProvider from "@/components/wallet/AppWalletProvider";
 import "./globals.css";
 
@@ -29,6 +30,12 @@ export default function RootLayout({
         <AppWalletProvider>
           {children}
         </AppWalletProvider>
+        <Toaster 
+          position="top-right" 
+          theme="dark"
+          richColors
+          closeButton
+        />
         <Analytics />
       </body>
     </html>
