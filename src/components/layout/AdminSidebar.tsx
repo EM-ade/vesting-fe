@@ -130,7 +130,7 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
       {/* Header */}
       <div className="flex h-20 items-center justify-between px-5 border-b border-white/5">
         {!collapsed && (
-          <div className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <div className="relative w-8 h-8 rounded-lg overflow-hidden shadow-lg shadow-purple-500/20">
               <Image 
                 src="/lilgarg-logo.jpeg" 
@@ -142,35 +142,27 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
             <span className="font-space font-bold text-sm text-slate-200 tracking-tight leading-tight">
               LilGarg<br/><span className="text-purple-500">Vesting</span>
             </span>
-          </div>
+          </Link>
         )}
         {collapsed && (
-           <div className="relative w-10 h-10 rounded-lg overflow-hidden shadow-lg shadow-purple-500/20 mx-auto">
-             <Image 
-                src="/lilgarg-logo.jpeg" 
-                alt="LilGarg" 
-                fill
-                className="object-cover"
-              />
-           </div>
+           <Link href="/" className="block hover:opacity-80 transition-opacity">
+             <div className="relative w-10 h-10 rounded-lg overflow-hidden shadow-lg shadow-purple-500/20 mx-auto">
+               <Image 
+                  src="/lilgarg-logo.jpeg" 
+                  alt="LilGarg" 
+                  fill
+                  className="object-cover"
+                 />
+             </div>
+           </Link>
         )}
         
-        {onMobileClose ? (
+        {onMobileClose && (
           <button
             onClick={onMobileClose}
             className="p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors lg:hidden"
           >
             <X className="w-5 h-5" />
-          </button>
-        ) : (
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className={cn(
-              "p-1.5 rounded-lg hover:bg-white/5 text-slate-400 hover:text-white transition-colors hidden lg:block",
-              collapsed && "hidden"
-            )}
-          >
-            <ChevronLeft className="w-5 h-5" />
           </button>
         )}
       </div>
@@ -289,15 +281,17 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
         </button>
       </div>
       
-      {/* Toggle button when collapsed */}
-      {collapsed && (
-        <button
-          onClick={() => setCollapsed(false)}
-          className="absolute -right-3 top-24 bg-slate-900 border border-white/10 rounded-full p-1 text-slate-400 hover:text-white hover:border-purple-500/50 transition-all z-50 shadow-lg"
-        >
+      {/* Toggle button for expand/collapse */}
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="absolute -right-3 top-24 bg-slate-900 border border-white/10 rounded-full p-1 text-slate-400 hover:text-white hover:border-purple-500/50 transition-all z-50 shadow-lg"
+      >
+        {collapsed ? (
           <ChevronRight className="w-3 h-3" />
-        </button>
-      )}
+        ) : (
+          <ChevronLeft className="w-3 h-3" />
+        )}
+      </button>
     </aside>
   );
 }

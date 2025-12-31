@@ -27,7 +27,7 @@ export function useClaimsQuery(
       const poolParams = poolIds.length > 0 ? `&poolIds=${poolIds.join(',')}` : '';
       
       // Fetch stats
-      const statsUrl = `/metrics/claims-stats?projectId=${projectId}${poolParams}`;
+      const statsUrl = `/claims/stats?projectId=${projectId}${poolParams}`;
       const stats = await api.get<any>(statsUrl);
       
       // Build claims endpoint based on filter

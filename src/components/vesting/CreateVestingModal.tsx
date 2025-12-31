@@ -399,8 +399,8 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
       if (currentMode !== "manual" && !payloadRules.length) throw new Error("Add at least one rule");
 
       // 1. Transfer tokens + SOL from User Wallet to Project Vault (Treasury)
-      // Unless skipping Streamflow (testing mode)
-      if (!skipStreamflow && selectedToken) {
+      // Unless skipping Streamflow (testing mode) OR using treasury funding (tokens already there)
+      if (!skipStreamflow && selectedToken && fundingSource === 'wallet') {
         try {
           updateStatus(`💰 Funding treasury with ${amount} ${selectedToken.symbol}...`);
 
@@ -539,6 +539,9 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
           console.error(`[FUNDING] ❌ Failed to transfer tokens:`, fundingError);
           throw new Error(`Failed to transfer tokens to treasury: ${fundingError instanceof Error ? fundingError.message : 'Unknown error'}`);
         }
+      } else if (fundingSource === 'treasury') {
+        console.log('[FUNDING] Using treasury funding - skipping wallet transfer, tokens already in treasury');
+        updateStatus(`✅ Using existing treasury balance (${amount} ${selectedToken?.symbol})...`);
       }
 
 

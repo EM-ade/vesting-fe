@@ -241,13 +241,19 @@ export function AdminTopBar() {
     <header className="glass-panel relative z-[120] flex flex-col gap-4 overflow-visible rounded-2xl px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
       <div className="flex w-full flex-1 flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div className="flex items-center gap-3">
-          <Image
-            src="/WhatsApp Image 2025-10-04 at 12.46.50 PM.jpeg"
-            alt="Lil Gargs"
-            width={48}
-            height={48}
-            className="h-12 w-12 rounded-full border-2 border-purple-500/50 shadow-lg shadow-purple-500/20"
-          />
+          <Link 
+            href="/"
+            className="block flex-shrink-0 transition-opacity hover:opacity-80"
+            title="Go to Home"
+          >
+            <Image
+              src="/WhatsApp Image 2025-10-04 at 12.46.50 PM.jpeg"
+              alt="Lil Gargs"
+              width={48}
+              height={48}
+              className="h-12 w-12 min-w-[3rem] min-h-[3rem] rounded-full border-2 border-purple-500/50 shadow-lg shadow-purple-500/20 object-cover"
+            />
+          </Link>
           <div>
             <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-[var(--muted)]">
               <span>Lil Gargs Admin Console</span>

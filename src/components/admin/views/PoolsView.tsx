@@ -285,15 +285,40 @@ export function PoolsView() {
 }
 
 function PoolRow({ pool, onClick, onCancel, onRefresh }: { pool: Pool, onClick: () => void, onCancel: () => void, onRefresh: () => Promise<void> }) {
-  // Allocation progress: show number of users allocated
-  const userCount = pool.stats?.userCount || 0;
-  const hasAllocations = userCount > 0;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [pauseLoading, setPauseLoading] = useState(false);
 
   // Check if pool has started
   const poolStarted = pool.start_time ? new Date(pool.start_time) <= new Date() : false;
   const isPaused = pool.state === 'paused';
+
+  // Calculate time-based vesting progress
+  const calculateTimeBasedProgress = () => {
+    // Support both snake_case (from API) and camelCase (from modal)
+    const startTimeStr = pool.start_time || pool.startTime;
+    const endTimeStr = pool.end_time || pool.endTime;
+    
+    if (!startTimeStr || !endTimeStr) return 0;
+    
+    const now = Date.now();
+    const startTime = new Date(startTimeStr).getTime();
+    const endTime = new Date(endTimeStr).getTime();
+    
+    // If vesting hasn't started yet
+    if (now < startTime) return 0;
+    
+    // If vesting has ended
+    if (now >= endTime) return 100;
+    
+    // Calculate progress based on time elapsed
+    const totalDuration = endTime - startTime;
+    const elapsed = now - startTime;
+    const progress = (elapsed / totalDuration) * 100;
+    
+    return Math.min(100, Math.max(0, progress));
+  };
+
+  const vestingProgress = calculateTimeBasedProgress();
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -367,12 +392,12 @@ function PoolRow({ pool, onClick, onCancel, onRefresh }: { pool: Pool, onClick: 
         <div className="flex flex-col gap-1.5">
           <div className="flex justify-between text-xs">
             <span className="font-mono text-slate-400">{formatTokenAmount(pool.totalAmount || 0)}</span>
-            <span className="text-slate-500">{userCount} users</span>
+            <span className="text-slate-500">{vestingProgress.toFixed(1)}%</span>
           </div>
           <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
             <div
               className="h-full bg-purple-500 rounded-full transition-all duration-500"
-              style={{ width: `${hasAllocations ? 100 : 0}%` }}
+              style={{ width: `${vestingProgress}%` }}
             />
           </div>
         </div>

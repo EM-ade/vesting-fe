@@ -31,7 +31,7 @@ interface AdminAuthProviderProps {
 }
 
 const SESSION_STORAGE_KEY = "admin_auth_session";
-const SIGNATURE_EXPIRY_MS = 4 * 60 * 1000; // 4 minutes (backend validates signatures for 5 minutes, we refresh at 4)
+const SIGNATURE_EXPIRY_MS = 25 * 60 * 1000; // 25 minutes (backend validates signatures for 30 minutes, we refresh at 25)
 const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours (cache lasts until tab closes via sessionStorage)
 
 interface CachedAuth extends AdminAuthPayload {

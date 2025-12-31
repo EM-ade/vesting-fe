@@ -39,7 +39,7 @@ interface Claim {
 }
 
 interface ClaimStats {
-  totalClaims: number;
+  total: number;        // ← Fixed to match backend response
   totalAmount: number;
   uniqueUsers: number;
   last24h?: number;
@@ -180,7 +180,7 @@ export function ClaimsManagementView() {
           >
             <div className="text-gray-400 text-sm mb-1">Total Claims</div>
             <div className="text-2xl font-bold text-white">
-              {(stats.totalClaims || 0).toLocaleString()}
+              {(stats?.total || 0).toLocaleString()}
             </div>
           </motion.div>
           <motion.div 

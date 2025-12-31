@@ -56,7 +56,29 @@ export function PoolDetailsModal({ open, onClose, pool, onUpdate }: PoolDetailsM
     return new Date(dateString).toLocaleString();
   };
 
-  const percentage = pool.streamflow?.vestedPercentage || 0;
+  // Calculate time-based vesting progress
+  const calculateTimeBasedProgress = () => {
+    if (!pool.startTime || !pool.endTime) return 0;
+    
+    const now = Date.now();
+    const startTime = new Date(pool.startTime).getTime();
+    const endTime = new Date(pool.endTime).getTime();
+    
+    // If vesting hasn't started yet
+    if (now < startTime) return 0;
+    
+    // If vesting has ended
+    if (now >= endTime) return 100;
+    
+    // Calculate progress based on time elapsed
+    const totalDuration = endTime - startTime;
+    const elapsed = now - startTime;
+    const progress = (elapsed / totalDuration) * 100;
+    
+    return Math.min(100, Math.max(0, progress));
+  };
+
+  const percentage = calculateTimeBasedProgress();
 
   const handleStartEdit = () => {
     setNewName(pool.name);

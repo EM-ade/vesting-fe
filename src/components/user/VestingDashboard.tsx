@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Connection } from "@solana/web3.js";
 import { WalletConnectButton } from "./WalletConnectButton";
 import { apiClient } from "@/lib/apiClient";
@@ -360,9 +361,9 @@ export function VestingDashboard() {
       {/* Header */}
       <div className="mb-8 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
+          <Link href="/" className="flex items-center gap-3 min-w-0 hover:opacity-80 transition-opacity">
             <Image
-              src="/WhatsApp Image 2025-10-04 at 12.46.50 PM.jpeg"
+              src="/lilgarg-logo.jpeg"
               alt="Lil Gargs"
               width={48}
               height={48}
@@ -371,7 +372,7 @@ export function VestingDashboard() {
             <h1 className="text-xl sm:text-2xl font-bold truncate">
               Lil Gargs Vesting
             </h1>
-          </div>
+          </Link>
           <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={toggleDemoMode}
