@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { api } from "@/lib/api";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { withAdminAuth } from "@/lib/adminAuth";
 
 type ManualAllocation = {
   id: string;
@@ -43,6 +45,7 @@ export function EditAllocationsModal({
   currentAllocations,
   onSuccess,
 }: EditAllocationsModalProps) {
+  const wallet = useWallet();
   const [allocations, setAllocations] = useState<ManualAllocation[]>([]);
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkWallets, setBulkWallets] = useState("");
@@ -138,8 +141,8 @@ export function EditAllocationsModal({
         throw new Error(`Fixed allocations (${totalFixed}) exceed pool amount (${totalPoolAmount})`);
       }
 
-      // Update allocations
-      await api.put(`/pools/${poolId}/allocations`, {
+      // Update allocations with admin auth
+      const allocationData = await withAdminAuth(wallet, {
         allocations: validAllocations.map((a) => ({
           wallet: a.wallet,
           allocationType: a.allocationType,
@@ -147,6 +150,8 @@ export function EditAllocationsModal({
           note: a.note,
         })),
       });
+
+      await api.put(`/pools/${poolId}/allocations`, allocationData);
 
       alert(`Successfully updated allocations for ${validAllocations.length} wallet(s)!`);
       onSuccess();

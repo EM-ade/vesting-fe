@@ -6,6 +6,9 @@ import { Modal } from "@/components/ui/Modal";
 import { api } from "@/lib/api";
 import { AlertCircle, Wallet, ArrowRight, ExternalLink, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { mergeAdminAuth } from "@/lib/adminAuth";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
 
 interface WithdrawModalProps {
     open: boolean;
@@ -34,6 +37,8 @@ interface TreasuryStatus {
 }
 
 export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawModalProps) {
+    const wallet = useWallet();
+    const adminAuth = useAdminAuth();
     const [selectedToken, setSelectedToken] = useState<string>(""); // mint address
     const [availableTokens, setAvailableTokens] = useState<TokenOption[]>([]);
     const [amount, setAmount] = useState("");
@@ -69,10 +74,17 @@ export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawM
     }
 
     async function loadAvailableBalance() {
+        // Don't fetch if no token is selected
+        if (!selectedToken) {
+            setBalanceInfo(null);
+            return;
+        }
+
         setBalanceLoading(true);
         setError(null);
         try {
-            const data = await api.get<AvailableBalance>(`/treasury/available?projectId=${projectId}`);
+            // Pass the selected token mint to get accurate balance for that specific token
+            const data = await api.get<AvailableBalance>(`/treasury/available?projectId=${projectId}&tokenMint=${selectedToken}`);
             setBalanceInfo(data);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load balance");
@@ -110,18 +122,23 @@ export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawM
                 ? `/treasury/withdraw-sol?projectId=${projectId}`
                 : `/treasury/withdraw?projectId=${projectId}`;
             
+            // Get admin auth from session context
+            const authPayload = await adminAuth.getAuthPayload();
+            const requestBody = mergeAdminAuth(authPayload, {
+                amount: parseFloat(amount),
+                recipientAddress,
+                note,
+                tokenMint: isSOL ? undefined : selectedToken, // Only send tokenMint for SPL tokens
+                projectId, // Include projectId in body for middleware
+            });
+            
             const response = await api.post<{ 
                 success: boolean; 
                 signature: string; 
                 amount: number; 
                 recipient: string;
                 message?: string;
-            }>(endpoint, {
-                amount: parseFloat(amount),
-                recipientAddress,
-                note,
-                tokenMint: isSOL ? undefined : selectedToken, // Only send tokenMint for SPL tokens
-            });
+            }>(endpoint, requestBody);
 
             // Show success state with transaction signature
             setSuccessData({
@@ -144,9 +161,11 @@ export function WithdrawModal({ open, onClose, projectId, onSuccess }: WithdrawM
             });
 
             // Call onSuccess callback after a brief moment to show the success state
+            // Don't refresh the page - just close the modal
             setTimeout(() => {
                 if (onSuccess) onSuccess();
-            }, 500);
+                onClose();
+            }, 2000); // Give user time to see success message
 
             // Reset form
             setAmount("");

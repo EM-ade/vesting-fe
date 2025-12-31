@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { api } from "@/lib/api";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { withAdminAuth } from "@/lib/adminAuth";
 
 type AddRuleModalProps = {
   open: boolean;
@@ -13,6 +15,7 @@ type AddRuleModalProps = {
 };
 
 export function AddRuleModal({ open, onClose, poolId, onSuccess }: AddRuleModalProps) {
+  const wallet = useWallet();
   const [name, setName] = useState("");
   const [nftContract, setNftContract] = useState("");
   const [threshold, setThreshold] = useState("1");
@@ -31,7 +34,7 @@ export function AddRuleModal({ open, onClose, poolId, onSuccess }: AddRuleModalP
     setError(null);
 
     try {
-      await api.post(`/pools/${poolId}/rules`, {
+      const ruleData = await withAdminAuth(wallet, {
         name,
         nftContract,
         threshold: parseInt(threshold),
@@ -39,6 +42,8 @@ export function AddRuleModal({ open, onClose, poolId, onSuccess }: AddRuleModalP
         allocationValue: parseFloat(allocationValue),
         enabled: true,
       });
+
+      await api.post(`/pools/${poolId}/rules`, ruleData);
 
       // Reset form
       setName("");

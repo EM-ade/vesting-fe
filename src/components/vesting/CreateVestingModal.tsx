@@ -23,6 +23,8 @@ import { cn } from "@/lib/utils";
 import { useProject } from "@/contexts/ProjectContext";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { mergeAdminAuth } from "@/lib/adminAuth";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
 
 // ... (existing types) ...
 interface TokenInfo {
@@ -89,7 +91,8 @@ const DEFAULT_RULE: RuleForm = {
 export function CreateVestingModal({ open, onClose, mode, onModeChange, onSuccess }: CreateVestingModalProps) {
   const { currentProject } = useProject();
   const { connection } = useConnection();
-  const { publicKey, sendTransaction } = useWallet();
+  const wallet = useWallet();
+  const { publicKey, sendTransaction } = wallet;
   const [currentMode, setCurrentMode] = useState<VestingMode>(mode);
   const [poolName, setPoolName] = useState("");
   const [amount, setAmount] = useState("");
@@ -108,7 +111,11 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
   const [skipStreamflow, setSkipStreamflow] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
   const [claimFeeUSD, setClaimFeeUSD] = useState<number>(0.50); // Default $0.50
+  const [fundingStatus, setFundingStatus] = useState<string | null>(null);
   const [solPrice, setSolPrice] = useState<number>(200); // Default SOL price, will be fetched
+  
+  // Use session-based admin auth (already authorized at login)
+  const adminAuth = useAdminAuth();
 
   // Token Selection State (Mock for now, simulating multiple tokens)
   const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
@@ -117,6 +124,49 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
   // Available tokens (mock data + current project token)
   const [availableTokens, setAvailableTokens] = useState<TokenInfo[]>([]);
   const [loadingTokens, setLoadingTokens] = useState(false);
+
+  // Funding source selection
+  const [fundingSource, setFundingSource] = useState<'wallet' | 'treasury'>('wallet');
+  const [treasuryBalance, setTreasuryBalance] = useState<number | null>(null);
+  const [loadingTreasuryBalance, setLoadingTreasuryBalance] = useState(false);
+
+  // Fetch treasury balance for selected token
+  const fetchTreasuryBalance = async (tokenMint: string) => {
+    if (!currentProject?.id) return;
+
+    setLoadingTreasuryBalance(true);
+    try {
+      const response = await api.get<{ balance: number }>(
+        `/treasury/balance?projectId=${currentProject.id}&tokenMint=${tokenMint}`
+      );
+      setTreasuryBalance(response.balance || 0);
+    } catch (err) {
+      console.error('Failed to fetch treasury balance:', err);
+      setTreasuryBalance(0);
+    } finally {
+      setLoadingTreasuryBalance(false);
+    }
+  };
+
+  // Fetch treasury tokens
+  const fetchTreasuryTokens = async () => {
+    if (!currentProject?.id) return;
+
+    setLoadingTokens(true);
+    try {
+      const response = await api.get<{ tokens: TokenInfo[] }>(
+        `/treasury/tokens?projectId=${currentProject.id}`
+      );
+      
+      const tokens = response.tokens || [];
+      setAvailableTokens(tokens);
+    } catch (err) {
+      console.error('Failed to fetch treasury tokens:', err);
+      setAvailableTokens([]);
+    } finally {
+      setLoadingTokens(false);
+    }
+  };
 
   // Fetch tokens from the CONNECTED WALLET
   const fetchWalletTokens = async () => {
@@ -203,11 +253,17 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
     fetchSolPrice();
   }, []);
 
+  // Fetch tokens based on funding source when modal opens or source changes
   useEffect(() => {
-    if (open && publicKey) {
-      fetchWalletTokens();
+    if (open) {
+      if (fundingSource === 'wallet' && publicKey) {
+        fetchWalletTokens();
+      } else if (fundingSource === 'treasury' && currentProject?.id) {
+        fetchTreasuryTokens();
+      }
     }
-  }, [open, publicKey, connection]); // Added connection dependency
+  }, [open, fundingSource, publicKey, currentProject?.id, connection]);
+
 
   useEffect(() => {
     if (!open) return;
@@ -229,7 +285,17 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
     setActiveStep(1);
     // Reset to default token
     setSelectedToken(null);
+    // Reset funding source
+    setFundingSource('wallet');
+    setTreasuryBalance(null);
   }, [open, mode]);
+
+  // Fetch treasury balance when token or funding source changes
+  useEffect(() => {
+    if (fundingSource === 'treasury' && selectedToken && currentProject?.id) {
+      fetchTreasuryBalance(selectedToken.mint);
+    }
+  }, [fundingSource, selectedToken?.mint, currentProject?.id]);
 
   // ... (validation and helper functions unchanged) ...
   async function validatePool() {
@@ -305,19 +371,10 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
 
     setLoading(true);
     setError(null);
-
-    // Add status message for user
-    const statusDiv = document.createElement('div');
-    statusDiv.id = 'funding-status';
-    statusDiv.className = 'fixed top-4 right-4 bg-slate-900 border border-purple-500/50 rounded-xl p-4 z-50 shadow-2xl';
-    statusDiv.innerHTML = '<div class="text-sm text-white">Preparing transaction...</div>';
-    document.body.appendChild(statusDiv);
+    setFundingStatus('Preparing transaction...');
 
     const updateStatus = (message: string) => {
-      const status = document.getElementById('funding-status');
-      if (status) {
-        status.innerHTML = `<div class="text-sm text-white">${message}</div>`;
-      }
+      setFundingStatus(message);
     };
 
     try {
@@ -493,7 +550,10 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
         throw new Error('Please select a token in Step 1 before creating the pool');
       }
 
-      await api.post("/pools", {
+      // Get auth payload from session context
+      const authPayload = await adminAuth.getAuthPayload();
+      
+      const poolData = mergeAdminAuth(authPayload, {
         name: poolName || `Vesting - ${new Date().toLocaleDateString()}`,
         total_pool_amount: Number(amount),
         vesting_duration_days: durationSeconds / 86400,
@@ -511,7 +571,16 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
         skipStreamflow,
         token_mint: selectedToken.mint, // Now guaranteed to exist
         claim_fee_lamports: Math.floor((claimFeeUSD / solPrice) * LAMPORTS_PER_SOL), // Convert USD to lamports
+        funding_source: fundingSource, // ✅ NEW: Tell backend where to get tokens from ('wallet' or 'treasury')
       });
+
+      // Add better error message for insufficient funds
+      if (fundingStatus && fundingStatus.includes('Fund treasury')) {
+        throw new Error('Treasury needs to be funded with SOL before creating pool. Click "Fund Treasury" to add ~0.015 SOL for Streamflow fees.');
+      }
+
+      // Create the pool with signed authentication
+      await api.post("/pools", poolData);
 
       updateStatus(`✨ Pool created successfully!`);
 
@@ -523,13 +592,11 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
 
       onModeChange(currentMode);
       if (onSuccess) onSuccess();
+      setFundingStatus(null);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Creation failed");
-
-      // Remove status on error
-      const status = document.getElementById('funding-status');
-      if (status) status.remove();
+      setFundingStatus(null);
     } finally {
       setLoading(false);
     }
@@ -586,8 +653,64 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
                 />
               </div>
 
+              {/* Funding Source Selector - MOVED TO TOP */}
+              <div>
+                <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Funding Source</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Wallet Funding */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFundingSource('wallet');
+                      setSelectedToken(null);
+                      setAvailableTokens([]);
+                    }}
+                    className={cn(
+                      "p-4 rounded-xl border text-left transition-all",
+                      fundingSource === 'wallet'
+                        ? "bg-purple-500/10 border-purple-500 text-white"
+                        : "bg-slate-900 border-white/10 text-slate-400 hover:border-white/20"
+                    )}
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <Wallet className="w-5 h-5" />
+                      <span className="font-medium">Your Wallet</span>
+                    </div>
+                    <div className="text-[10px] opacity-70 leading-relaxed">
+                      Transfer tokens from your connected wallet
+                    </div>
+                  </button>
+
+                  {/* Treasury Funding */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFundingSource('treasury');
+                      setSelectedToken(null);
+                      setAvailableTokens([]);
+                    }}
+                    className={cn(
+                      "p-4 rounded-xl border text-left transition-all",
+                      fundingSource === 'treasury'
+                        ? "bg-green-500/10 border-green-500 text-white"
+                        : "bg-slate-900 border-white/10 text-slate-400 hover:border-white/20"
+                    )}
+                  >
+                    <div className="flex items-center gap-3 mb-2">
+                      <Coins className="w-5 h-5" />
+                      <span className="font-medium">Treasury</span>
+                    </div>
+                    <div className="text-[10px] opacity-70 leading-relaxed">
+                      Use tokens already in project treasury
+                    </div>
+                  </button>
+                </div>
+              </div>
+
               <div className="relative">
-                <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Funding Token</label>
+                <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">
+                  Funding Token {fundingSource === 'treasury' ? '(from Treasury)' : '(from Your Wallet)'}
+                </label>
 
                 {/* Custom Dropdown for Token Selection */}
                 <div
@@ -670,6 +793,7 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
                   </div>
                 )}
               </div>
+
 
               <div>
                 <label className="block text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Total Pool Size</label>
@@ -1003,7 +1127,15 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Create Vesting Pool" widthClassName="max-w-6xl h-[800px] w-full mx-4 md:mx-auto">
+    <>
+      {/* Funding Status Toast (SECURITY: Using React state instead of innerHTML to prevent XSS) */}
+      {fundingStatus && (
+        <div className="fixed top-4 right-4 bg-slate-900 border border-purple-500/50 rounded-xl p-4 z-50 shadow-2xl">
+          <div className="text-sm text-white">{fundingStatus}</div>
+        </div>
+      )}
+      
+      <Modal open={open} onClose={onClose} title="Create Vesting Pool" widthClassName="max-w-6xl h-[800px] w-full mx-4 md:mx-auto">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
 
         {/* Main Form Section */}
@@ -1131,7 +1263,8 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
           </div>
         </div>
 
-      </div>
-    </Modal>
+        </div>
+      </Modal>
+    </>
   );
 }

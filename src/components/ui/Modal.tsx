@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { backdropVariants, modalVariants } from "@/lib/animations";
 
 type ModalProps = {
   open: boolean;
@@ -32,18 +34,33 @@ export function Modal({ open, title, description, children, footer, onClose, wid
     return null;
   }
 
-  if (!open) {
-    return null;
-  }
-
   return createPortal(
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div
-        className={cn(
-          "glass-panel relative max-h-[80vh] w-full overflow-hidden overflow-y-auto rounded-2xl p-6 text-white shadow-2xl bg-[#0c0b25] border border-white/10",
-          widthClassName ?? "max-w-xl"
-        )}
-      >
+    <AnimatePresence>
+      {open && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            className="fixed inset-0 z-[999] bg-black/80 backdrop-blur-sm"
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            onClick={onClose}
+          />
+          
+          {/* Modal Container */}
+          <div className="fixed inset-0 z-[999] flex items-center justify-center pointer-events-none">
+            <motion.div
+              className={cn(
+                "glass-panel relative max-h-[80vh] w-full overflow-hidden overflow-y-auto rounded-2xl p-6 text-white shadow-2xl bg-[#0c0b25] border border-white/10 pointer-events-auto",
+                widthClassName ?? "max-w-xl"
+              )}
+              variants={modalVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={(e) => e.stopPropagation()}
+            >
         {/* X Close Button */}
         <button
           onClick={onClose}
@@ -66,8 +83,11 @@ export function Modal({ open, title, description, children, footer, onClose, wid
         {footer && (
           <footer className="mt-6 flex flex-wrap justify-end gap-2">{footer}</footer>
         )}
-      </div>
-    </div>,
+      </motion.div>
+    </div>
+        </>
+      )}
+    </AnimatePresence>,
     document.body
   );
 }

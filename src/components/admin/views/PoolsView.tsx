@@ -1,43 +1,55 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { formatTokenAmount } from "@/lib/formatters";
 import { Button } from "@/components/ui/Button";
-import { Plus, Users, MoreHorizontal, Search, Filter, StopCircle, Pause, Play, Trash2, Loader2 } from "lucide-react";
+import { Plus, Users, MoreHorizontal, Search, Filter, StopCircle, Pause, Play, Trash2, Loader2, RefreshCw } from "lucide-react";
 import { CreateVestingModal } from "@/components/vesting/CreateVestingModal";
 import { PoolDetailsModal } from "@/components/admin/modals/PoolDetailsModal";
 import { ConfirmationModal } from "@/components/ui/ConfirmationModal";
 import { cn } from "@/lib/utils";
-
+import { usePoolsQuery } from "@/hooks/queries";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useProject } from "@/contexts/ProjectContext";
+import { motion } from "framer-motion";
+import { staggerContainer, listItemVariants } from "@/lib/animations";
 
-// Define pool interface
+// Define pool interface - aligned with Zustand store type
 interface Pool {
   id: string;
   name: string;
-  vestingMode: string;
-  state: string;
-  totalAmount: number;
+  vestingMode?: string;
+  state?: string;
+  totalAmount?: number;
   start_time?: string;
   is_active?: boolean;
-  startTime: string;  // Required by PoolDetailsModal
-  endTime: string;    // Required by PoolDetailsModal
-  vestingDuration: number;  // Required by PoolDetailsModal
-  cliffDuration: number;    // Required by PoolDetailsModal
+  isActive?: boolean;
+  startTime?: string;
+  endTime?: string;
+  vestingDuration?: number;
+  cliffDuration?: number;
   streamflowId?: string;
   stats?: {
-    userCount: number;
+    userCount?: number;
   };
   streamflow?: {
-    vestedPercentage: number;
+    vestedPercentage?: number;
   };
-  [key: string]: unknown; // allow for additional properties
+  [key: string]: any; // allow for additional properties
 }
 
 export function PoolsView() {
-  const [pools, setPools] = useState<Pool[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { currentProject } = useProject();
+  
+  // TanStack Query: Pools data with automatic caching
+  const { 
+    data: pools = [], 
+    isLoading, 
+    isFetching,
+    refetch 
+  } = usePoolsQuery(currentProject?.id || null);
+  
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [selectedPool, setSelectedPool] = useState<Pool | null>(null);
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
@@ -46,22 +58,6 @@ export function PoolsView() {
   const [cancelLoading, setCancelLoading] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "paused" | "cancelled">("all");
-
-  useEffect(() => {
-    loadPools();
-  }, []);
-
-  const loadPools = async () => {
-    setLoading(true);
-    try {
-      const data = await api.get<Pool[]>('/pools');
-      setPools(data || []);
-    } catch (error) {
-      console.error("Failed to load pools:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const confirmCancelPool = (poolId: string) => {
     setPoolToCancel(poolId);
@@ -88,11 +84,8 @@ export function PoolsView() {
         await api.delete(`/pools/${poolToCancel}`);
       }
 
-      // Optimistic update
-      setPools(currentPools => currentPools.filter(p => p.id !== poolToCancel));
-
-      // Refresh list to be sure
-      loadPools();
+      // Refresh list after cancellation
+      await refetch();
 
       setCancelModalOpen(false);
       setPoolToCancel(null);
@@ -172,7 +165,7 @@ export function PoolsView() {
       </div>
 
       {/* Pools List - Technical View */}
-      <div className="bg-slate-950 border border-white/10 rounded-xl overflow-x-auto pb-20 md:pb-0">
+      <div className="bg-slate-950 border border-white/10 rounded-xl overflow-x-auto overflow-y-visible pb-20 md:pb-0">
         <div className="min-w-[800px] grid grid-cols-12 gap-4 p-4 border-b border-white/5 bg-slate-900/30 text-xs font-mono text-slate-500 uppercase tracking-wider">
           <div className="col-span-4">Pool Name / ID</div>
           <div className="col-span-2">Status</div>
@@ -181,9 +174,27 @@ export function PoolsView() {
           <div className="col-span-1 text-right">Actions</div>
         </div>
 
-        <div className="divide-y divide-white/5 min-w-[800px]">
-          {loading ? (
-            // Loading Skeletons
+        <motion.div 
+          className="divide-y divide-white/5 min-w-[800px]"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+        >
+          {/* Subtle loading indicator when refreshing with cached data */}
+          {isFetching && pools.length > 0 && (
+            <motion.div 
+              className="fixed top-4 right-4 z-50 bg-purple-500/90 backdrop-blur-sm text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <RefreshCw className="w-3 h-3 animate-spin" />
+              <span className="text-sm font-medium">Refreshing pools...</span>
+            </motion.div>
+          )}
+          
+          {isLoading ? (
+            // Loading Skeletons - only show when no cached data
             Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="grid grid-cols-12 gap-4 p-4 items-center">
                 <div className="col-span-4 flex items-center gap-3">
@@ -219,7 +230,7 @@ export function PoolsView() {
                   pool={pool}
                   onClick={() => handlePoolClick(pool)}
                   onCancel={() => confirmCancelPool(pool.id)}
-                  onRefresh={loadPools}
+                  onRefresh={async () => { await refetch(); }}
                 />
               ))}
 
@@ -241,7 +252,7 @@ export function PoolsView() {
               )}
             </>
           )}
-        </div>
+        </motion.div>
       </div>
 
       <CreateVestingModal
@@ -249,14 +260,14 @@ export function PoolsView() {
         onClose={() => setCreateModalOpen(false)}
         mode="snapshot"
         onModeChange={() => { }}
-        onSuccess={loadPools}
+        onSuccess={() => refetch()}
       />
 
       <PoolDetailsModal
         open={detailsModalOpen}
         onClose={() => setDetailsModalOpen(false)}
-        pool={selectedPool}
-        onUpdate={loadPools}
+        pool={selectedPool as any} // Pool types are compatible at runtime
+        onUpdate={() => refetch()}
       />
 
       <ConfirmationModal
@@ -314,9 +325,11 @@ function PoolRow({ pool, onClick, onCancel, onRefresh }: { pool: Pool, onClick: 
   };
 
   return (
-    <div
+    <motion.div
       onClick={onClick}
       className="grid grid-cols-12 gap-4 p-4 items-center hover:bg-white/[0.02] transition-colors group relative cursor-pointer"
+      variants={listItemVariants}
+      whileHover="hover"
     >
       {/* ... existing row content ... */}
       <div className="col-span-4">
@@ -353,7 +366,7 @@ function PoolRow({ pool, onClick, onCancel, onRefresh }: { pool: Pool, onClick: 
       <div className="col-span-3">
         <div className="flex flex-col gap-1.5">
           <div className="flex justify-between text-xs">
-            <span className="font-mono text-slate-400">{formatTokenAmount(pool.totalAmount)}</span>
+            <span className="font-mono text-slate-400">{formatTokenAmount(pool.totalAmount || 0)}</span>
             <span className="text-slate-500">{userCount} users</span>
           </div>
           <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
@@ -424,6 +437,6 @@ function PoolRow({ pool, onClick, onCancel, onRefresh }: { pool: Pool, onClick: 
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }

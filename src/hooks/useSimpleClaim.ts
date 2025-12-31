@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { Transaction, VersionedTransaction } from "@solana/web3.js";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 interface ClaimResponse {
   success: boolean;
@@ -192,7 +193,35 @@ export function useSimpleClaim() {
       } catch (err) {
         const error = err instanceof Error ? err : new Error("Claim failed");
         console.error("[CLAIM] Error:", error);
-        setError(error);
+        
+        // Provide user-friendly error messages with toast notifications
+        let errorMessage = error.message || "Claim failed";
+        
+        // Rate limit errors (429)
+        if (errorMessage.includes('wait 10 seconds') || errorMessage.includes('Duplicate request')) {
+          errorMessage = "Please wait 10 seconds before claiming again";
+          toast.warning("⏱️ Rate Limit", {
+            description: errorMessage + ". This prevents accidental double-claims.",
+            duration: 5000,
+          });
+        }
+        // RPC connection errors (500)
+        else if (errorMessage.includes('fetch failed') || errorMessage.includes('blockhash') || errorMessage.includes('recent blockhash')) {
+          errorMessage = "RPC connection error. Please try again in a moment.";
+          toast.error("⚠️ Network Error", {
+            description: "The Solana RPC connection is temporarily unavailable. Please try again.",
+            duration: 5000,
+          });
+        }
+        // Generic errors
+        else {
+          toast.error("❌ Claim Failed", {
+            description: errorMessage,
+            duration: 5000,
+          });
+        }
+        
+        setError(new Error(errorMessage));
         setStatus("Claim failed");
         setProgress(0);
         return null;

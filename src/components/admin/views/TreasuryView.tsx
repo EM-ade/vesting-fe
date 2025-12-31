@@ -7,6 +7,7 @@ import { CreateVestingModal } from "@/components/vesting/CreateVestingModal";
 import { Button } from "@/components/ui/Button";
 import { ArrowDownToLine, BookOpen, Plus } from "lucide-react";
 import { useProject } from "@/contexts/ProjectContext";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { OnboardingModal } from "@/components/admin/OnboardingModal";
 
@@ -15,6 +16,7 @@ export function TreasuryView() {
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const { currentProject, refreshData } = useProject();
+  const queryClient = useQueryClient();
 
   return (
     <div className="space-y-6">
@@ -57,8 +59,9 @@ export function TreasuryView() {
             onClose={() => setWithdrawModalOpen(false)}
             projectId={currentProject.id}
             onSuccess={() => {
-              // Optionally refresh treasury widget
-              window.location.reload();
+              // Invalidate treasury queries to refetch data
+              queryClient.invalidateQueries({ queryKey: ['admin', currentProject.id, 'treasury'] });
+              refreshData();
             }}
           />
           <OnboardingModal

@@ -66,10 +66,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (!publicKey) {
         setProjects([]);
         setCurrentProject(null);
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('selectedProjectId');
-          localStorage.removeItem('cachedProject');
-        }
+        // DON'T clear localStorage - keep the saved project for when wallet reconnects
+        // This prevents reverting to first project after temporary disconnects
         return;
       }
 
@@ -88,16 +86,15 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       // Restore last selected project if available
       const savedProjectId = typeof window !== 'undefined' ? localStorage.getItem('selectedProjectId') : null;
+      
       if (savedProjectId && response) {
         const project = response.find(p => p.id === savedProjectId);
         if (project) {
           setCurrentProject(project);
-          // Cache for instant display on next load
           if (typeof window !== 'undefined') {
             localStorage.setItem('cachedProject', JSON.stringify(project));
           }
         } else {
-          // Saved project not found, default to first
           setCurrentProject(response[0]);
           if (typeof window !== 'undefined') {
             localStorage.setItem('selectedProjectId', response[0].id);
@@ -105,7 +102,6 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
         }
       } else {
-        // No saved project, default to first
         setCurrentProject(response[0]);
         if (typeof window !== 'undefined') {
           localStorage.setItem('selectedProjectId', response[0].id);
@@ -125,7 +121,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     loadProjects();
-  }, [fetchProjects, publicKey]);
+  }, [fetchProjects]); // Removed publicKey - fetchProjects already depends on it
 
   const refreshProjects = async () => {
     setIsLoading(true);
@@ -139,7 +135,6 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setCurrentProject(project);
       if (typeof window !== 'undefined') {
         localStorage.setItem('selectedProjectId', projectId);
-        // Cache for instant display on next load
         localStorage.setItem('cachedProject', JSON.stringify(project));
       }
       // Trigger data refresh when switching projects

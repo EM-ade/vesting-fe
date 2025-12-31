@@ -17,6 +17,10 @@ import {
 import { useProject } from "@/contexts/ProjectContext";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { toast } from "sonner";
+import { withAdminAuth } from "@/lib/adminAuth";
+import { useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import { fadeInUp, staggerContainer, cardVariants } from "@/lib/animations";
 
 type TreasuryStatus = {
   treasury: {
@@ -95,8 +99,10 @@ interface AvailableBalance {
 }
 
 export function TreasuryWidget() {
+  const wallet = useWallet();
   const { currentProject, dataRefreshKey } = useProject();
-  const { publicKey } = useWallet();
+  const { publicKey } = wallet;
+  const queryClient = useQueryClient();
   const [treasuryStatus, setTreasuryStatus] = useState<TreasuryStatus | null>(
     null
   );
@@ -196,12 +202,10 @@ export function TreasuryWidget() {
       setTreasuryStatus(data);
 
       // Also fetch available balance for withdrawal (for selected token) - non-blocking
-      if (currentProject?.id) {
-        const tokenParam = withdrawTokenMint
-          ? `&tokenMint=${withdrawTokenMint}`
-          : "";
+      // Only fetch if we have a token selected (avoid empty tokenMint parameter)
+      if (currentProject?.id && withdrawTokenMint) {
         api.get<AvailableBalance>(
-          `/treasury/available?projectId=${currentProject.id}${tokenParam}`
+          `/treasury/available?projectId=${currentProject.id}&tokenMint=${withdrawTokenMint}`
         )
         .then(balance => setBalanceInfo(balance))
         .catch(err => {
@@ -266,14 +270,18 @@ export function TreasuryWidget() {
         ? "/treasury/withdraw-sol"
         : "/treasury/withdraw";
 
+      // Sign admin message with wallet (proves you own the admin wallet)
+      const requestBody = await withAdminAuth(wallet, {
+        amount: parseFloat(withdrawAmount),
+        recipientAddress: withdrawRecipient,
+        note: withdrawNote,
+        tokenMint: isSOLWithdraw ? undefined : withdrawTokenMint, // Only send tokenMint for SPL tokens
+        projectId: currentProject?.id, // Include projectId in body for middleware
+      });
+
       const response = await api.post<{ success: boolean; signature: string }>(
         endpoint,
-        {
-          amount: parseFloat(withdrawAmount),
-          recipientAddress: withdrawRecipient,
-          note: withdrawNote,
-          tokenMint: isSOLWithdraw ? undefined : withdrawTokenMint, // Only send tokenMint for SPL tokens
-        }
+        requestBody
       );
 
       toast.success("Withdrawal Successful", {
@@ -312,7 +320,12 @@ export function TreasuryWidget() {
   // Show loading skeleton while fetching (but not if we have stale data)
   if (loading && !treasuryStatus) {
     return (
-      <div className="bg-slate-950 border border-white/10 rounded-xl p-6 space-y-6">
+      <motion.div 
+        className="bg-slate-950 border border-white/10 rounded-xl p-6 space-y-6"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
         {/* Header skeleton */}
         <div className="flex items-center justify-between">
           <div className="h-6 w-40 bg-white/5 rounded animate-pulse" />
@@ -322,10 +335,16 @@ export function TreasuryWidget() {
         {/* Metrics skeleton */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[1, 2, 3].map(i => (
-            <div key={i} className="bg-white/5 rounded-lg p-4 space-y-3">
+            <motion.div 
+              key={i} 
+              className="bg-white/5 rounded-lg p-4 space-y-3"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: i * 0.1, duration: 0.3 }}
+            >
               <div className="h-4 w-24 bg-white/10 rounded animate-pulse" />
               <div className="h-8 w-32 bg-white/10 rounded animate-pulse" />
-            </div>
+            </motion.div>
           ))}
         </div>
         
@@ -333,7 +352,7 @@ export function TreasuryWidget() {
         <div className="h-48 bg-white/5 rounded-lg animate-pulse" />
         
         <p className="text-center text-white/40 text-xs">Loading treasury data...</p>
-      </div>
+      </motion.div>
     );
   }
 
@@ -354,9 +373,12 @@ export function TreasuryWidget() {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              // Invalidate all admin queries to force refetch
+              queryClient.invalidateQueries({ queryKey: ['admin', currentProject?.id] });
+            }}
           >
-            Reload Page
+            Refresh Data
           </Button>
         </div>
         <p className="text-xs text-white/40 mt-4">
@@ -370,7 +392,12 @@ export function TreasuryWidget() {
   const bufferPercentage = status.bufferPercentage;
 
   return (
-    <div className="bg-slate-950 border border-white/10 rounded-xl overflow-hidden flex flex-col h-full">
+    <motion.div 
+      className="bg-slate-950 border border-white/10 rounded-xl overflow-hidden flex flex-col h-full"
+      variants={fadeInUp}
+      initial="hidden"
+      animate="visible"
+    >
       <div className="p-6 border-b border-white/5 flex items-center justify-between bg-slate-900/30">
         <div>
           <h2 className="font-medium text-white">Treasury Status</h2>
@@ -406,7 +433,7 @@ export function TreasuryWidget() {
               ? "Healthy"
               : status.health === "warning"
               ? "Warning"
-              : "Critical"}
+              : "Low Balance"}
           </div>
         </div>
       </div>
@@ -429,11 +456,19 @@ export function TreasuryWidget() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            {tokens.map((token) => (
-              <div
+          <motion.div 
+            className="space-y-2"
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+          >
+            {tokens.map((token, index) => (
+              <motion.div
                 key={token.mint}
                 className="bg-white/[0.02] border border-white/5 rounded-lg p-3 flex justify-between items-center"
+                variants={cardVariants}
+                whileHover="hover"
+                transition={{ delay: index * 0.05 }}
               >
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 font-bold text-xs">
@@ -457,14 +492,19 @@ export function TreasuryWidget() {
                   </p>
                   <p className="text-[10px] text-slate-500">Total Balance</p>
                 </div>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
 
         {/* Recommendations */}
         {recommendations.length > 0 && (
-          <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-lg">
+          <motion.div 
+            className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-lg"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
             <p className="text-xs font-medium text-blue-400 mb-2 flex items-center gap-1.5">
               <AlertTriangle className="w-3 h-3" /> Recommendations
             </p>
@@ -478,7 +518,7 @@ export function TreasuryWidget() {
                 </li>
               ))}
             </ul>
-          </div>
+          </motion.div>
         )}
       </div>
 
@@ -581,6 +621,6 @@ export function TreasuryWidget() {
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }

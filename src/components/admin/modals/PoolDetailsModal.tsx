@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/Button";
 import { Calendar, Coins, ExternalLink, ShieldCheck, Users, Activity, Edit2, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { mergeAdminAuth } from "@/lib/adminAuth";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
 
 interface PoolData {
   id: string;
@@ -35,6 +38,8 @@ interface PoolDetailsModalProps {
 }
 
 export function PoolDetailsModal({ open, onClose, pool, onUpdate }: PoolDetailsModalProps) {
+  const wallet = useWallet();
+  const adminAuth = useAdminAuth();
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -66,7 +71,9 @@ export function PoolDetailsModal({ open, onClose, pool, onUpdate }: PoolDetailsM
 
     setSaving(true);
     try {
-      await api.put(`/pools/${pool.id}`, { name: newName });
+      const authPayload = await adminAuth.getAuthPayload();
+      const nameData = mergeAdminAuth(authPayload, { name: newName });
+      await api.put(`/pools/${pool.id}`, nameData);
       if (onUpdate) onUpdate();
       pool.name = newName; // Optimistic update
       setIsEditingName(false);

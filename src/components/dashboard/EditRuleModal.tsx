@@ -5,6 +5,8 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { api } from "@/lib/api";
 import type { SnapshotRule } from "@/types/vesting";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { withAdminAuth } from "@/lib/adminAuth";
 
 type EditRuleModalProps = {
   open: boolean;
@@ -15,6 +17,7 @@ type EditRuleModalProps = {
 };
 
 export function EditRuleModal({ open, onClose, rule, poolId, onSuccess }: EditRuleModalProps) {
+  const wallet = useWallet();
   const [name, setName] = useState("");
   const [nftContract, setNftContract] = useState("");
   const [threshold, setThreshold] = useState("");
@@ -46,7 +49,7 @@ export function EditRuleModal({ open, onClose, rule, poolId, onSuccess }: EditRu
       }
 
       // Update the pool's nft_requirements in the database
-      await api.put(`/pools/${poolId}/rules`, {
+      const ruleData = await withAdminAuth(wallet, {
         ruleId: rule.id,
         name,
         nftContract,
@@ -54,6 +57,8 @@ export function EditRuleModal({ open, onClose, rule, poolId, onSuccess }: EditRu
         allocationType,
         allocationValue: Number(allocationValue),
       });
+
+      await api.put(`/pools/${poolId}/rules`, ruleData);
 
       onSuccess();
       onClose();

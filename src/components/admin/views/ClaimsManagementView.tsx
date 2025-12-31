@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { api } from "@/lib/api";
+import { useState } from "react";
 import { useProject } from "@/contexts/ProjectContext";
+import { api } from "@/lib/api";
 import { CreateVestingModal } from "@/components/vesting/CreateVestingModal";
 import { Button } from "@/components/ui/Button";
 import {
@@ -20,32 +20,34 @@ import {
 import { formatTokenAmount } from "@/lib/formatters";
 import { formatDistanceToNow } from "date-fns";
 import { MultiSelect, MultiSelectOption } from "@/components/ui/MultiSelect";
+import { useClaimsQuery, usePoolsQuery } from "@/hooks/queries";
+import { motion, AnimatePresence } from "framer-motion";
+import { staggerContainer, listItemVariants, cardVariants } from "@/lib/animations";
 
+// Using the same type as the Zustand store
 interface Claim {
   id: string;
-  user_wallet: string;
-  pool_id: number;
-  pool_name: string;
+  wallet: string;
   amount: number;
+  created_at: string;
+  timestamp?: string;
   signature: string;
-  timestamp: string;
-  status: string;
+  pool_id?: number;
+  pool_name?: string;
+  status?: string;
   token_mint?: string;
 }
 
 interface ClaimStats {
-  total: number;
-  last24h: number;
-  last7d: number;
+  totalClaims: number;
   totalAmount: number;
   uniqueUsers: number;
+  last24h?: number;
+  last7d?: number;
 }
 
 export function ClaimsManagementView() {
-  const { currentProject, dataRefreshKey, refreshData } = useProject();
-  const [claims, setClaims] = useState<Claim[]>([]);
-  const [stats, setStats] = useState<ClaimStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { currentProject, refreshData } = useProject();
   const [filter, setFilter] = useState<"all" | "24h" | "7d">("all");
   const [searchWallet, setSearchWallet] = useState("");
   const [selectedClaim, setSelectedClaim] = useState<Claim | null>(null);
@@ -53,157 +55,43 @@ export function ClaimsManagementView() {
 
   // Pool Filtering State
   const [selectedPoolIds, setSelectedPoolIds] = useState<string[]>([]);
-  const [availablePools, setAvailablePools] = useState<
-    Array<{ id: string; name: string }>
-  >([]);
-  const [poolOptions, setPoolOptions] = useState<MultiSelectOption[]>([]);
 
-  useEffect(() => {
-    if (currentProject) {
-      loadClaimsAndStats();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, currentProject, dataRefreshKey, selectedPoolIds]);
+  // TanStack Query: Claims data with automatic caching
+  const { 
+    data: claimsData, 
+    isLoading, 
+    isFetching,
+    refetch 
+  } = useClaimsQuery(currentProject?.id || null, filter, selectedPoolIds);
 
-  async function loadClaimsAndStats() {
-    if (!currentProject) return;
+  // TanStack Query: Available pools for filter dropdown
+  const { data: availablePools = [] } = usePoolsQuery(currentProject?.id || null);
 
-    setLoading(true);
-    try {
-      // Fetch pools if not loaded
-      if (availablePools.length === 0) {
-        try {
-          const poolsRes = await api.get<
-            Array<{ id: string; name: string; is_active: boolean }>
-          >("/pools");
-          setAvailablePools(poolsRes || []);
-          setPoolOptions(
-            (poolsRes || []).map((p) => ({
-              label: p.name,
-              value: p.id.toString(),
-            }))
-          );
-        } catch (err) {
-          console.error("Failed to load pools for filter:", err);
-        }
-      }
+  const claims = claimsData?.claims || [];
+  const stats = claimsData?.stats;
 
-      const poolQueryParams =
-        selectedPoolIds.length > 0
-          ? `&poolIds=${selectedPoolIds.join(",")}`
-          : "";
-      const poolQueryParamsFirst =
-        selectedPoolIds.length > 0
-          ? `?poolIds=${selectedPoolIds.join(",")}`
-          : "";
+  const poolOptions: MultiSelectOption[] = availablePools.map((p: any) => ({
+    label: p.name,
+    value: p.id.toString(),
+  }));
 
-      // Load stats
-      // Check if URL already has query params to decide on ? or &
-      const statsUrl = `/claims/stats?projectId=${currentProject.id}${poolQueryParams}`;
-      const statsRes = await api.get<ClaimStats>(statsUrl);
-      setStats(statsRes);
-
-      // Load claims
-      const params = new URLSearchParams();
-      params.append("projectId", currentProject.id);
-      if (selectedPoolIds.length > 0) {
-        params.append("poolIds", selectedPoolIds.join(","));
-      }
-      if (filter === "24h") {
-        const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        params.append("since", since);
-      } else if (filter === "7d") {
-        const since = new Date(
-          Date.now() - 7 * 24 * 60 * 60 * 1000
-        ).toISOString();
-        params.append("since", since);
-      }
-
-      const claimsRes = await api.get<
-        Claim[] | { claims: Claim[]; data: Claim[] }
-      >(`/claims?${params}`);
-      console.log("Claims response:", claimsRes);
-
-      // Handle different response structures
-      if (Array.isArray(claimsRes)) {
-        console.log("[CLAIMS] Got direct array:", claimsRes.length, "claims");
-        if (claimsRes.length > 0) {
-          console.log(
-            "[CLAIMS] First claim structure:",
-            Object.keys(claimsRes[0])
-          );
-        }
-        setClaims(claimsRes);
-      } else if (claimsRes?.claims && Array.isArray(claimsRes.claims)) {
-        console.log(
-          "[CLAIMS] Got claims in wrapper:",
-          claimsRes.claims.length,
-          "claims"
-        );
-        setClaims(claimsRes.claims);
-      } else if (claimsRes?.data && Array.isArray(claimsRes.data)) {
-        console.log(
-          "[CLAIMS] Got data in wrapper:",
-          claimsRes.data.length,
-          "claims"
-        );
-        setClaims(claimsRes.data);
-      } else {
-        console.warn("[CLAIMS] Unexpected response structure:", claimsRes);
-        setClaims([]);
-      }
-    } catch (error) {
-      console.error("Failed to load claims:", error);
-      // Set default stats on error
-      setStats({
-        total: 0,
-        last24h: 0,
-        last7d: 0,
-        totalAmount: 0,
-        uniqueUsers: 0,
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
-
+  // Wallet search - for now just refreshes with normal filters
+  // TODO: Implement backend wallet-specific search endpoint if needed
   async function searchByWallet() {
     if (!searchWallet.trim()) {
-      loadClaimsAndStats();
+      refetch();
       return;
     }
-
-    setLoading(true);
-    try {
-      const claimsRes = await api.get<
-        Claim[] | { claims: Claim[]; data: Claim[] }
-      >(`/claims/wallet/${searchWallet}?projectId=${currentProject?.id}`);
-      console.log("Wallet claims response:", claimsRes);
-
-      // Handle different response structures
-      if (Array.isArray(claimsRes)) {
-        setClaims(claimsRes);
-      } else if (claimsRes?.claims && Array.isArray(claimsRes.claims)) {
-        setClaims(claimsRes.claims);
-      } else if (claimsRes?.data && Array.isArray(claimsRes.data)) {
-        setClaims(claimsRes.data);
-      } else {
-        console.warn("Unexpected wallet claims response:", claimsRes);
-        setClaims([]);
-      }
-    } catch (error) {
-      console.error("Failed to search wallet:", error);
-      setClaims([]);
-    } finally {
-      setLoading(false);
-    }
+    // For now, just log the search - backend doesn't have wallet-specific endpoint yet
+    console.log("Wallet search requested for:", searchWallet);
+    alert("Wallet-specific search not yet implemented. Use the table filter instead.");
   }
 
   async function handleFlagClaim(claimId: string, reason: string) {
     try {
       await api.post(`/claims/${claimId}/flag`, { reason });
       alert("Claim flagged successfully");
-      loadClaimsAndStats();
+      refetch();
     } catch (error) {
       console.error("Failed to flag claim:", error);
       alert("Failed to flag claim");
@@ -212,7 +100,7 @@ export function ClaimsManagementView() {
 
   function exportToCsv() {
     const headers = ["Timestamp", "Wallet", "Pool", "Amount", "Signature"];
-    const rows = claims.map((c) => {
+    const rows = claims.map((c: Claim) => {
       let dateStr = "N/A";
       try {
         if (c.timestamp) {
@@ -225,7 +113,7 @@ export function ClaimsManagementView() {
 
       return [
         dateStr,
-        c.user_wallet,
+        c.wallet || 'N/A',
         c.pool_name || c.pool_id,
         c.amount,
         c.signature,
@@ -242,7 +130,7 @@ export function ClaimsManagementView() {
     URL.revokeObjectURL(url);
   }
 
-  if (loading && !stats) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
@@ -279,38 +167,63 @@ export function ClaimsManagementView() {
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+        <motion.div 
+          className="grid grid-cols-1 md:grid-cols-5 gap-4"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div 
+            className="bg-gray-800/50 rounded-lg p-4 border border-gray-700"
+            variants={cardVariants}
+            whileHover="hover"
+          >
             <div className="text-gray-400 text-sm mb-1">Total Claims</div>
             <div className="text-2xl font-bold text-white">
-              {(stats.total || 0).toLocaleString()}
+              {(stats.totalClaims || 0).toLocaleString()}
             </div>
-          </div>
-          <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+          </motion.div>
+          <motion.div 
+            className="bg-gray-800/50 rounded-lg p-4 border border-gray-700"
+            variants={cardVariants}
+            whileHover="hover"
+          >
             <div className="text-gray-400 text-sm mb-1">Last 24h</div>
             <div className="text-2xl font-bold text-green-400">
               {(stats.last24h || 0).toLocaleString()}
             </div>
-          </div>
-          <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+          </motion.div>
+          <motion.div 
+            className="bg-gray-800/50 rounded-lg p-4 border border-gray-700"
+            variants={cardVariants}
+            whileHover="hover"
+          >
             <div className="text-gray-400 text-sm mb-1">Last 7d</div>
             <div className="text-2xl font-bold text-blue-400">
               {(stats.last7d || 0).toLocaleString()}
             </div>
-          </div>
-          <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+          </motion.div>
+          <motion.div 
+            className="bg-gray-800/50 rounded-lg p-4 border border-gray-700"
+            variants={cardVariants}
+            whileHover="hover"
+          >
             <div className="text-gray-400 text-sm mb-1">Total Amount</div>
             <div className="text-2xl font-bold text-purple-400">
               {(stats.totalAmount || 0).toLocaleString()}
             </div>
-          </div>
-          <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+          </motion.div>
+          <motion.div 
+            className="bg-gray-800/50 rounded-lg p-4 border border-gray-700"
+            variants={cardVariants}
+            whileHover="hover"
+          >
             <div className="text-gray-400 text-sm mb-1">Unique Users</div>
             <div className="text-2xl font-bold text-orange-400">
               {(stats.uniqueUsers || 0).toLocaleString()}
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
 
       {/* Filters & Search */}
@@ -380,7 +293,7 @@ export function ClaimsManagementView() {
               <button
                 onClick={() => {
                   setSearchWallet("");
-                  loadClaimsAndStats();
+                  refetch();
                 }}
                 className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-white transition-colors"
               >
@@ -418,7 +331,7 @@ export function ClaimsManagementView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700">
-              {loading ? (
+              {isLoading ? (
                 <tr>
                   <td
                     colSpan={6}
@@ -438,10 +351,15 @@ export function ClaimsManagementView() {
                 </tr>
               ) : (
                 Array.isArray(claims) &&
-                claims.map((claim) => (
-                  <tr
+                claims.map((claim, index) => (
+                  <motion.tr
                     key={claim.id}
                     className="hover:bg-gray-700/30 transition-colors"
+                    variants={listItemVariants}
+                    initial="hidden"
+                    animate="visible"
+                    custom={index}
+                    transition={{ delay: index * 0.05 }}
                   >
                     <td className="px-4 py-3 text-sm text-gray-300">
                       {claim.timestamp &&
@@ -450,11 +368,8 @@ export function ClaimsManagementView() {
                         : "N/A"}
                     </td>
                     <td className="px-4 py-3 text-sm font-mono text-gray-300">
-                      {claim.user_wallet
-                        ? `${claim.user_wallet.slice(
-                            0,
-                            8
-                          )}...${claim.user_wallet.slice(-8)}`
+                      {claim.wallet
+                        ? `${claim.wallet.slice(0, 8)}...${claim.wallet.slice(-8)}`
                         : "N/A"}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-300">
@@ -498,7 +413,7 @@ export function ClaimsManagementView() {
                         </button>
                       </div>
                     </td>
-                  </tr>
+                  </motion.tr>
                 ))
               )}
             </tbody>
@@ -527,7 +442,7 @@ export function ClaimsManagementView() {
               <div>
                 <div className="text-gray-400 text-sm">Wallet Address</div>
                 <div className="text-white font-mono text-sm break-all">
-                  {selectedClaim.user_wallet}
+                  {selectedClaim.wallet}
                 </div>
               </div>
               <div>

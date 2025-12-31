@@ -1,60 +1,64 @@
 "use client";
 
-import React from "react";
-import { useAdminAuth } from "@/hooks/useAdminAuth";
+import React, { useEffect } from "react";
 import { useProject } from "@/contexts/ProjectContext";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAdminAuthQuery } from "@/hooks/queries";
 import { OverviewView } from "@/components/admin/views/OverviewView";
 import { PoolsView } from "@/components/admin/views/PoolsView";
 import { TreasuryView } from "@/components/admin/views/TreasuryView";
 import { ClaimsManagementView } from "@/components/admin/views/ClaimsManagementView";
 import { OnboardingModal } from "@/components/admin/OnboardingModal";
+import { AnimatePresence, motion } from "framer-motion";
+import { adminTabAnimations } from "@/lib/animations";
 
 export function AdminDashboard() {
-  const { isAdmin, isLoading } = useAdminAuth();
-  const { currentProject } = useProject();
+  const { currentProject, isLoading: projectLoading } = useProject();
   const pathname = usePathname();
+  const router = useRouter();
+  
+  // Use TanStack Query for admin auth - auto-caches by project
+  const { 
+    data: authData, 
+    isLoading: authLoading,
+    isError: authError 
+  } = useAdminAuthQuery(currentProject?.id || null);
+  
+  const isAdmin = authData?.isAdmin || false;
+  const isLoading = authLoading;
 
-  // IMPORTANT: All hooks must be called before any conditional returns
-  // Route-based view switching with content retention
-  const [currentView, setCurrentView] = React.useState<React.ReactNode>(<OverviewView />);
-  const [isTransitioning, setIsTransitioning] = React.useState(false);
-
-  React.useEffect(() => {
-    // Determine new content based on pathname
-    let newContent: React.ReactNode;
-    
-    if (pathname === "/admin/pools") {
-      newContent = <PoolsView />;
-    } else if (pathname === "/admin/treasury") {
-      newContent = <TreasuryView />;
-    } else if (pathname === "/admin/claims") {
-      newContent = <ClaimsManagementView />;
-    } else {
-      newContent = <OverviewView />;
+  // Redirect non-admin users
+  useEffect(() => {
+    if (!isLoading && !authLoading && !isAdmin && authData?.success === true) {
+      router.push('/user/vesting');
     }
+  }, [isLoading, authLoading, isAdmin, authData, router]);
 
-    // Brief transition to prevent jarring switches
-    setIsTransitioning(true);
-    const timer = setTimeout(() => {
-      setCurrentView(newContent);
-      setIsTransitioning(false);
-    }, 50); // Very brief delay to avoid flash
+  // Determine current view from pathname
+  const getCurrentView = () => {
+    if (pathname === "/admin/pools") return "pools";
+    if (pathname === "/admin/treasury") return "treasury";
+    if (pathname === "/admin/claims") return "claims";
+    return "overview";
+  };
 
-    return () => clearTimeout(timer);
-  }, [pathname]);
+  const currentView = getCurrentView();
 
-  // Conditional returns AFTER all hooks
-  if (isLoading) {
+  // ZERO-FLICKER FIX: Only show loading if we have NO data and we're loading
+  // If we have cached data (from TanStack Query), show it immediately
+  const showLoading = (isLoading || projectLoading || authLoading) && !currentProject;
+
+  if (showLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-4">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
-        <div className="text-white/60">Verifying access...</div>
+        <div className="text-white/60">Loading dashboard...</div>
       </div>
     );
   }
 
-  if (!isAdmin) {
+  // If auth check failed or user is not admin, show error
+  if (authError || (!isLoading && !authLoading && !isAdmin)) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-4 text-center">
         <div className="text-red-400 font-bold text-xl">Access Denied</div>
@@ -65,7 +69,8 @@ export function AdminDashboard() {
     );
   }
 
-  if (!currentProject) {
+  // Only show "no project" screen if we're truly done loading and have no project
+  if (!currentProject && !projectLoading && !isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-6 text-center px-4">
         <div className="space-y-3">
@@ -84,9 +89,20 @@ export function AdminDashboard() {
   return (
     <>
       <OnboardingModal />
-      <div className={isTransitioning ? "opacity-95" : "opacity-100 transition-opacity duration-150"}>
-        {currentView}
-      </div>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={currentView}
+          variants={adminTabAnimations[currentView as keyof typeof adminTabAnimations]}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+        >
+          {currentView === "pools" && <PoolsView />}
+          {currentView === "treasury" && <TreasuryView />}
+          {currentView === "claims" && <ClaimsManagementView />}
+          {currentView === "overview" && <OverviewView />}
+        </motion.div>
+      </AnimatePresence>
     </>
   );
 }

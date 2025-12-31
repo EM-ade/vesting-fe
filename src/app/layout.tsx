@@ -3,6 +3,7 @@ import { Manrope } from 'next/font/google';
 import { Analytics } from "@vercel/analytics/react";
 import { Toaster } from "sonner";
 import AppWalletProvider from "@/components/wallet/AppWalletProvider";
+import { QueryProvider } from "@/providers/QueryProvider";
 import "./globals.css";
 
 const manrope = Manrope({
@@ -27,16 +28,18 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${manrope.variable}`} suppressHydrationWarning>
       <body className="bg-[#030305] antialiased font-manrope text-white selection:bg-blue-500/30">
-        <AppWalletProvider>
-          {children}
-        </AppWalletProvider>
-        <Toaster 
-          position="top-right" 
-          theme="dark"
-          richColors
-          closeButton
-        />
-        <Analytics />
+        <QueryProvider>
+          <AppWalletProvider>
+            {children}
+          </AppWalletProvider>
+          <Toaster 
+            position="top-right" 
+            theme="dark"
+            richColors
+            closeButton
+          />
+          <Analytics />
+        </QueryProvider>
       </body>
     </html>
   );

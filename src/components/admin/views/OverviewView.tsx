@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useProject } from "@/contexts/ProjectContext";
-import { api } from "@/lib/api";
 import { formatTokenAmount } from "@/lib/formatters";
 import {
   TrendingUp,
@@ -13,13 +12,15 @@ import {
   Plus,
   Clock,
   CheckCircle,
+  RefreshCw,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { CreateVestingModal } from "@/components/vesting/CreateVestingModal";
 import { Button } from "@/components/ui/Button";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
-import { useDataWithCache } from "@/hooks/useDataWithCache";
+import { useAdminDashboardQuery, usePoolsQuery } from "@/hooks/queries";
+import { usePrefetchAllTabs } from "@/hooks/queries/usePrefetchQueries";
 
 type OverviewMetrics = {
   totalValueLocked: number;
@@ -37,9 +38,11 @@ type ActivityLogItem = {
   id: string;
   action: string;
   admin_wallet?: string;
+  wallet?: string; // For claim events - the claimer's wallet
   timestamp: string;
   created_at?: string;
   details?: Record<string, unknown>;
+  signature?: string; // Transaction signature for Solscan link
 };
 
 type RecentClaim = {
@@ -60,131 +63,68 @@ type DashboardData = {
 };
 
 export function OverviewView() {
-  const {
-    currentProject,
-    dataRefreshKey,
-    refreshData: refreshProject,
-  } = useProject();
+  const { currentProject, refreshData: refreshProject } = useProject();
   const [selectedPoolIds, setSelectedPoolIds] = useState<string[]>([]);
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
-  // Data Fetcher
-  const fetchData = useCallback(async (): Promise<DashboardData> => {
-    if (!currentProject?.id) throw new Error("No project selected");
+  // TanStack Query: Dashboard data with automatic caching and zero-flicker
+  const { 
+    data: dashboardData, 
+    isLoading, 
+    isFetching,
+    isError,
+    error,
+    refetch 
+  } = useAdminDashboardQuery(currentProject?.id || null, selectedPoolIds);
 
-    const queryParams =
-      selectedPoolIds.length > 0 ? `&poolIds=${selectedPoolIds.join(",")}` : "";
-    const poolParams =
-      selectedPoolIds.length > 0 ? `?poolIds=${selectedPoolIds.join(",")}` : "";
+  // TanStack Query: Available pools for filter dropdown
+  const { data: availablePools = [] } = usePoolsQuery(currentProject?.id || null);
 
-    const [
-      treasury,
-      pools,
-      claims,
-      eligibleWalletsRes,
-      activityLogRes,
-      availablePoolsRes,
-    ] = await Promise.all([
-      api.get<{
-        allocations: { totalAllocated: number; totalClaimed: number };
-        metrics: { claimCount: number };
-        treasury: { balance: number };
-        tokenBreakdown?: Array<{
-          tokenMint: string;
-          tokenSymbol: string;
-          totalAllocated: number;
-          totalClaimed: number;
-          balance: number;
-        }>;
-      }>(`/treasury/status?projectId=${currentProject.id}${queryParams}`),
-      api.get<Array<{ id: string; name: string; isActive: boolean }>>("/pools"),
-      api.get<{ claims: RecentClaim[] }>(`/claims?limit=8${queryParams}`),
-      api
-        .get<{ count: number }>(
-          `/metrics/eligible-wallets?projectId=${currentProject.id}${queryParams}`
-        )
-        .catch(() => ({ count: 0 })),
-      api
-        .get<{ activities: ActivityLogItem[] }>(
-          `/metrics/activity-log?limit=20${queryParams}`
-        )
-        .catch(() => ({ activities: [] })),
-      api.get<Array<{ id: string; name: string }>>("/pools"),
-    ]);
+  // Prefetch other tabs in background for instant navigation
+  usePrefetchAllTabs(currentProject?.id || null, selectedPoolIds);
 
-    // Calculate Metrics
-    const totalAllocated =
-      treasury?.tokenBreakdown?.reduce((sum, t) => sum + t.totalAllocated, 0) ||
-      treasury?.allocations?.totalAllocated ||
-      0;
-    const totalClaimed =
-      treasury?.tokenBreakdown?.reduce((sum, t) => sum + t.totalClaimed, 0) ||
-      treasury?.allocations?.totalClaimed ||
-      0;
-    const totalBalance =
-      treasury?.tokenBreakdown?.reduce((sum, t) => sum + t.balance, 0) ||
-      treasury?.treasury?.balance ||
-      0;
+  // Extract data from batch response
+  const metrics = dashboardData?.data?.treasury ? {
+    totalValueLocked: dashboardData.data.treasury.allocations?.totalAllocated || 0,
+    totalClaimed: dashboardData.data.treasury.allocations?.totalClaimed || 0,
+    activePoolsCount: dashboardData.data.pools?.filter((p: any) => p.is_active).length || 0,
+    totalUsers: dashboardData.data.treasury.metrics?.claimCount || 0,
+    treasuryBalance: dashboardData.data.treasury.treasury?.balance || 0,
+  } : null;
 
-    return {
-      metrics: {
-        totalValueLocked: totalAllocated,
-        totalClaimed: totalClaimed,
-        activePoolsCount: pools?.filter((p) => p.isActive).length || 0,
-        totalUsers: treasury?.metrics?.claimCount || 0,
-        treasuryBalance: totalBalance,
-      },
-      recentActivity: claims?.claims || [],
-      eligibleWallets: eligibleWalletsRes?.count || 0,
-      activityLog: activityLogRes?.activities || [],
-      availablePools: availablePoolsRes || [],
-    };
-  }, [currentProject?.id, selectedPoolIds]);
+  const recentActivity = dashboardData?.data?.claims?.claims || [];
+  // Use recent claims as activity log (same data structure as Claims Management tab)
+  const activityLog = recentActivity.slice(0, 10); // Show last 10 claims as activity
+  const eligibleWallets = dashboardData?.data?.eligibleWallets?.count || 0;
 
-  // Use Cached Data Hook
-  const cacheKey = `dashboard-${currentProject?.id}-${selectedPoolIds.join(
-    ","
-  )}-${dataRefreshKey}`;
-  const { data, loading, error, refresh } = useDataWithCache<DashboardData>(
-    cacheKey,
-    fetchData,
-    { ttl: 30000 } // 30s cache
-  );
-
-  const poolOptions = (data?.availablePools || []).map((p) => ({
+  const poolOptions = availablePools.map((p: any) => ({
     label: p.name,
     value: p.id.toString(),
   }));
 
-  // ALWAYS show skeleton during initial load (no data yet)
-  if (loading && !data) {
+  // Show skeleton immediately on initial load OR when changing projects
+  // This gives instant feedback on navigation
+  if (isLoading) {
     return <DashboardSkeleton />;
   }
 
   // Show error state with retry if load failed and no cached data
-  if (error && !data) {
+  if (isError && !dashboardData) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[500px] gap-4 px-4">
         <div className="text-center max-w-md space-y-4">
           <div className="text-6xl mb-4">⚠️</div>
           <h3 className="text-xl font-bold text-white">Failed to Load Dashboard</h3>
           <p className="text-white/60 text-sm leading-relaxed">
-            {error.message || "Unable to fetch dashboard data. This may be due to a slow network connection or server timeout."}
+            {error instanceof Error ? error.message : 'Unable to fetch dashboard data. This may be due to a slow network connection or server timeout.'}
           </p>
           <div className="flex gap-3 justify-center mt-6">
             <Button 
-              onClick={refresh} 
+              onClick={() => refetch()} 
               className="bg-purple-500 hover:bg-purple-600"
             >
               <ArrowUpRight className="w-4 h-4 mr-2" />
               Retry
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => window.location.reload()}
-              className="border-white/10 hover:bg-white/5"
-            >
-              Reload Page
             </Button>
           </div>
           <p className="text-xs text-white/40 mt-4">
@@ -195,10 +135,16 @@ export function OverviewView() {
     );
   }
 
-  const metrics = data?.metrics;
-
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
+      {/* Subtle loading indicator when refreshing with cached data */}
+      {isFetching && dashboardData && (
+        <div className="fixed top-4 right-4 z-50 bg-purple-500/90 backdrop-blur-sm text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 animate-in slide-in-from-top duration-300">
+          <RefreshCw className="w-3 h-3 animate-spin" />
+          <span className="text-sm font-medium">Refreshing...</span>
+        </div>
+      )}
+      
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -231,14 +177,12 @@ export function OverviewView() {
         <MetricCard
           label="Total Value Locked"
           value={formatTokenAmount(metrics?.totalValueLocked || 0)}
-          trend="+12.5%"
           icon={<Wallet className="w-4 h-4 text-purple-400" />}
           gradient="from-purple-500/10 to-blue-500/5"
         />
         <MetricCard
           label="Total Claimed"
           value={formatTokenAmount(metrics?.totalClaimed || 0)}
-          trend="+5.2%"
           icon={<TrendingUp className="w-4 h-4 text-green-400" />}
           gradient="from-green-500/10 to-emerald-500/5"
         />
@@ -265,46 +209,53 @@ export function OverviewView() {
             <span className="text-xs text-slate-500">Real-time updates</span>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
-            {data?.activityLog && data.activityLog.length > 0 ? (
-              data.activityLog.map((activity) => (
+            {activityLog && activityLog.length > 0 ? (
+              activityLog.map((claim: RecentClaim) => (
                 <div
-                  key={activity.id}
+                  key={claim.id}
                   className="group flex items-start gap-4 p-4 rounded-lg hover:bg-white/[0.02] border border-transparent hover:border-white/5 transition-all"
                 >
-                  <div className="mt-1.5 w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.4)]" />
+                  <div className="mt-1.5 w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
                   <div className="flex-1">
                     <div className="flex justify-between items-start">
                       <p className="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">
-                        {formatActivityAction(activity.action)}
+                        Claim Completed
                       </p>
                       <span className="text-[10px] text-slate-500 font-mono bg-slate-900 px-2 py-0.5 rounded border border-white/5">
-                        {activity.timestamp || activity.created_at
+                        {claim.timestamp || claim.created_at
                           ? formatDistanceToNow(
                               new Date(
-                                activity.timestamp || activity.created_at || ""
+                                claim.timestamp || claim.created_at || ""
                               ),
                               { addSuffix: true }
                             )
                           : "just now"}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {activity.admin_wallet && (
-                        <span>
-                          By{" "}
-                          <span className="text-slate-400 font-mono">
-                            {activity.admin_wallet.slice(0, 4)}...
-                            {activity.admin_wallet.slice(-4)}
-                          </span>
+                    <div className="flex items-center gap-3 mt-2">
+                      {/* Claimer's wallet */}
+                      <span className="text-xs text-slate-500">
+                        By{" "}
+                        <span className="text-slate-400 font-mono">
+                          {claim.wallet.slice(0, 4)}...
+                          {claim.wallet.slice(-4)}
                         </span>
-                      )}
-                      {activity.details && (
-                        <span className="ml-2 text-slate-600 border-l border-slate-800 pl-2">
-                          {Object.keys(activity.details).length > 0 &&
-                            "Details available"}
-                        </span>
-                      )}
-                    </p>
+                      </span>
+                      {/* Amount */}
+                      <span className="text-xs text-green-400 font-medium border-l border-slate-800 pl-3">
+                        +{formatTokenAmount(claim.amount)}
+                      </span>
+                      {/* Solscan link */}
+                      <a
+                        href={`https://solscan.io/tx/${claim.signature}?cluster=devnet`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-purple-400 hover:text-purple-300 hover:underline text-[10px] flex items-center gap-1 border-l border-slate-800 pl-3"
+                      >
+                        <ArrowUpRight className="w-3 h-3" />
+                        View on Solscan
+                      </a>
+                    </div>
                   </div>
                 </div>
               ))
@@ -329,7 +280,7 @@ export function OverviewView() {
             </h3>
             <div className="flex items-end gap-3 mb-4">
               <span className="text-4xl font-bold text-white tracking-tight">
-                {data?.eligibleWallets.toLocaleString()}
+                {eligibleWallets.toLocaleString()}
               </span>
               <span className="text-sm text-slate-500 mb-1.5">recipients</span>
             </div>
@@ -352,9 +303,9 @@ export function OverviewView() {
               </h3>
             </div>
             <div className="flex-1 overflow-y-auto custom-scrollbar">
-              {data?.recentActivity.length ? (
+              {recentActivity.length ? (
                 <div className="divide-y divide-white/5">
-                  {data.recentActivity.map((claim, i) => (
+                  {recentActivity.map((claim: any, i: number) => (
                     <div
                       key={i}
                       className="p-4 hover:bg-white/[0.02] transition-colors flex justify-between items-center group"
@@ -414,7 +365,7 @@ export function OverviewView() {
         onSuccess={() => {
           setCreateModalOpen(false);
           refreshProject();
-          refresh(); // Refresh cache
+          refetch(); // Refresh TanStack Query cache
         }}
       />
     </div>
@@ -432,6 +383,8 @@ function formatActivityAction(action: string): string {
     treasury_withdrawal: "Treasury Withdrawal",
     snapshot_triggered: "Snapshot Triggered",
     deploy_streamflow: "Deployed to Streamflow",
+    claim_completed: "Claim Completed", // Add claim event
+    claim: "Claim Completed",
   };
   return (
     actionMap[action] ||
