@@ -44,9 +44,9 @@ export function AdminDashboard() {
 
   const currentView = getCurrentView();
 
-  // ZERO-FLICKER FIX: Only show loading if we have NO data and we're loading
-  // If we have cached data (from TanStack Query), show it immediately
-  const showLoading = (isLoading || projectLoading || authLoading) && !currentProject;
+  // ANTI-FLICKER FIX: Only show loading if we have NO data at all
+  // During navigation, currentProject stays populated from cache, so no flicker
+  const showLoading = (isLoading || projectLoading || authLoading) && !currentProject && !authData;
 
   if (showLoading) {
     return (
@@ -58,7 +58,7 @@ export function AdminDashboard() {
   }
 
   // If auth check failed or user is not admin, show error
-  if (authError || (!isLoading && !authLoading && !isAdmin)) {
+  if (authError || (!isLoading && !authLoading && !isAdmin && authData?.success === true)) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-4 text-center">
         <div className="text-red-400 font-bold text-xl">Access Denied</div>
@@ -69,8 +69,9 @@ export function AdminDashboard() {
     );
   }
 
-  // Only show "no project" screen if we're truly done loading and have no project
-  if (!currentProject && !projectLoading && !isLoading) {
+  // ANTI-FLICKER FIX: Only show "no project" screen if we're truly done loading AND have no cached project
+  // This prevents showing the welcome screen during tab navigation
+  if (!currentProject && !projectLoading && !isLoading && !authLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-6 text-center px-4">
         <div className="space-y-3">

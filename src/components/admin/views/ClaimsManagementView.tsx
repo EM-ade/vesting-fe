@@ -130,7 +130,8 @@ export function ClaimsManagementView() {
     URL.revokeObjectURL(url);
   }
 
-  if (isLoading) {
+  // ANTI-FLICKER FIX: Only show loading if we have no cached data
+  if (isLoading && !claimsData) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>

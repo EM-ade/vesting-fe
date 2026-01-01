@@ -25,6 +25,7 @@ import Image from "next/image";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useProject } from "@/contexts/ProjectContext";
+import { usePrefetchHandlers } from "@/hooks/queries/usePrefetchQueries";
 
 type AdminSidebarProps = {
   collapsed: boolean;
@@ -40,6 +41,12 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
   const [isPaused, setIsPaused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // HOVER-BASED PREFETCHING: Load data when user hovers over nav items
+  const { prefetchPools, prefetchClaims, prefetchTreasury } = usePrefetchHandlers(
+    currentProject?.id || null,
+    []
+  );
 
   const signAndCall = async (endpoint: string, successMessage: string) => {
     if (!publicKey || !signMessage) {
@@ -113,10 +120,10 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
   };
 
   const navItems = [
-    { icon: LayoutDashboard, label: "Overview", href: "/admin" },
-    { icon: Database, label: "Pools", href: "/admin/pools" },
-    { icon: Wallet, label: "Treasury", href: "/admin/treasury" },
-    { icon: FileText, label: "Claims", href: "/admin/claims" },
+    { icon: LayoutDashboard, label: "Overview", href: "/admin", onHover: null },
+    { icon: Database, label: "Pools", href: "/admin/pools", onHover: prefetchPools },
+    { icon: Wallet, label: "Treasury", href: "/admin/treasury", onHover: prefetchTreasury },
+    { icon: FileText, label: "Claims", href: "/admin/claims", onHover: prefetchClaims },
   ];
 
   return (
@@ -212,6 +219,12 @@ export function AdminSidebar({ collapsed, setCollapsed, className, onMobileClose
             <Link
               key={item.href}
               href={item.href}
+              onMouseEnter={() => {
+                // HOVER PREFETCHING: Load data when user shows intent to click
+                if (item.onHover && !isActive) {
+                  item.onHover();
+                }
+              }}
               className={cn(
                 "flex items-center gap-3 px-3 py-3 rounded-xl transition-all group relative overflow-hidden",
                 isActive 

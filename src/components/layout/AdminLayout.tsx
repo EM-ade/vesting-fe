@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import { BackgroundGrid } from "@/components/ui/design-system/BackgroundGrid";
 import { Menu } from "lucide-react";
 import Image from "next/image";
+import { useHybridPrefetch } from "@/hooks/queries/usePrefetchQueries";
+import { useProject } from "@/contexts/ProjectContext";
 
 type AdminLayoutProps = {
   children: React.ReactNode;
@@ -14,6 +16,11 @@ type AdminLayoutProps = {
 export function AdminLayout({ children }: AdminLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { currentProject } = useProject();
+
+  // HYBRID PREFETCH STRATEGY: Immediate + Delayed prefetching
+  // Immediately prefetch Overview + Pools, then Claims + Treasury after 2s
+  useHybridPrefetch(currentProject?.id || null, []);
 
   return (
     <div className="min-h-screen bg-slate-950 font-inter text-white overflow-hidden">

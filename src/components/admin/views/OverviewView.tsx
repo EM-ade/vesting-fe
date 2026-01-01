@@ -104,7 +104,9 @@ export function OverviewView() {
 
   // Show skeleton immediately on initial load OR when changing projects
   // This gives instant feedback on navigation
-  if (isLoading) {
+  // ANTI-FLICKER FIX: Only show skeleton if we're loading AND have no cached data
+  // TanStack Query provides cached data immediately, so we can show stale data while refetching
+  if (isLoading && !dashboardData) {
     return <DashboardSkeleton />;
   }
 

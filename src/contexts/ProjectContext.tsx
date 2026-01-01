@@ -113,15 +113,25 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [publicKey]);
 
+  // ANTI-FLICKER FIX: Only fetch projects once on initial mount
+  // Use a ref to track if we've already fetched to prevent refetching on every page navigation
+  const hasFetchedRef = React.useRef(false);
+
   useEffect(() => {
     const loadProjects = async () => {
+      // Skip if we already fetched and have cached data
+      if (hasFetchedRef.current && currentProject) {
+        return;
+      }
+
       setIsLoading(true);
       await fetchProjects();
       setIsLoading(false);
+      hasFetchedRef.current = true;
     };
 
     loadProjects();
-  }, [fetchProjects]); // Removed publicKey - fetchProjects already depends on it
+  }, [fetchProjects, currentProject]); // Added currentProject to dependencies
 
   const refreshProjects = async () => {
     setIsLoading(true);

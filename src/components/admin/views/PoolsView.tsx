@@ -193,8 +193,8 @@ export function PoolsView() {
             </motion.div>
           )}
           
-          {isLoading ? (
-            // Loading Skeletons - only show when no cached data
+          {isLoading && pools.length === 0 ? (
+            // ANTI-FLICKER FIX: Loading Skeletons - only show when no cached data
             Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="grid grid-cols-12 gap-4 p-4 items-center">
                 <div className="col-span-4 flex items-center gap-3">
