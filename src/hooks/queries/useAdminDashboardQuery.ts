@@ -1,6 +1,12 @@
 /**
  * TanStack Query Hook: Admin Dashboard Data (Batch Endpoint)
  * Fetches all overview data in a single request for optimal performance
+ * 
+ * PERFORMANCE OPTIMIZATIONS:
+ * - Uses batch endpoint to reduce network roundtrips (6 calls → 1 call)
+ * - Implements keepPreviousData to prevent loading flickers
+ * - 5-minute stale time (inherited from queryClient)
+ * - Query key includes poolIds for proper cache invalidation
  */
 
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
@@ -29,6 +35,7 @@ export function useAdminDashboardQuery(
   const { claimsLimit = 8, activityLimit = 20 } = options || {};
 
   return useQuery({
+    // OPTIMIZATION: Stable query key with sorted poolIds for consistent caching
     queryKey: ['admin', projectId, 'dashboard', poolIds.sort().join(',')],
     
     queryFn: async () => {
@@ -43,11 +50,20 @@ export function useAdminDashboardQuery(
       return response;
     },
     
+    // Only run query when projectId is available
     enabled: !!projectId,
     
-    // Keep previous data while fetching new data (prevents flicker)
+    // OPTIMIZATION: Keep previous data while fetching new data (prevents flicker)
     placeholderData: keepPreviousData,
     
-    // Use global default (3 minutes) - overview metrics don't change frequently
+    // OPTIMIZATION: Inherit 5-minute stale time from global config
+    // Override only if you need different behavior for this specific query
+    // staleTime: 5 * 60 * 1000, // Already set globally
+    
+    // OPTIMIZATION: Longer stale time for dashboard since it's expensive to compute
+    staleTime: 5 * 60 * 1000, // 5 minutes - dashboard metrics change slowly
+    
+    // OPTIMIZATION: Cache for 30 minutes - dashboard data is valuable
+    gcTime: 30 * 60 * 1000, // 30 minutes
   });
 }
