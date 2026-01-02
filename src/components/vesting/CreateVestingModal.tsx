@@ -535,6 +535,26 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
 
           updateStatus(`✅ Tokens transferred successfully!`);
           console.log(`[FUNDING] ✅ Transaction confirmed: https://solscan.io/tx/${signature}`);
+
+          // CRITICAL FIX: Wait for balance to propagate before creating pool
+          // Production environments (Render) have higher latency than localhost
+          // The backend validation checks balance immediately, so we need to ensure it's updated
+          updateStatus(`⏳ Waiting for balance to update (2 seconds)...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          // Verify the balance updated successfully
+          const vaultPubkey = new PublicKey(currentProject.vault_public_key);
+          const updatedBalance = await connection.getBalance(vaultPubkey);
+          const updatedBalanceSOL = updatedBalance / LAMPORTS_PER_SOL;
+          console.log(`[FUNDING] ✅ Verified new balance: ${updatedBalanceSOL} SOL`);
+          
+          if (selectedToken.isNative && updatedBalanceSOL < Number(amount)) {
+            console.warn(`[FUNDING] ⚠️ Balance not fully updated yet. Expected at least ${amount} SOL, got ${updatedBalanceSOL} SOL`);
+            // Wait a bit more
+            updateStatus(`⏳ Balance still updating, waiting another 2 seconds...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+
         } catch (fundingError) {
           console.error(`[FUNDING] ❌ Failed to transfer tokens:`, fundingError);
           throw new Error(`Failed to transfer tokens to treasury: ${fundingError instanceof Error ? fundingError.message : 'Unknown error'}`);
