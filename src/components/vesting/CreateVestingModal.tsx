@@ -543,8 +543,8 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
           await new Promise(resolve => setTimeout(resolve, 2000));
 
           // Verify the balance updated successfully
-          const vaultPubkey = new PublicKey(currentProject.vault_public_key);
-          const updatedBalance = await connection.getBalance(vaultPubkey);
+          const vaultPublicKey = new PublicKey(currentProject.vault_public_key);
+          const updatedBalance = await connection.getBalance(vaultPublicKey);
           const updatedBalanceSOL = updatedBalance / LAMPORTS_PER_SOL;
           console.log(`[FUNDING] ✅ Verified new balance: ${updatedBalanceSOL} SOL`);
           
