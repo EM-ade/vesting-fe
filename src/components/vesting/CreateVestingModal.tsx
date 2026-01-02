@@ -535,26 +535,6 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
 
           updateStatus(`✅ Tokens transferred successfully!`);
           console.log(`[FUNDING] ✅ Transaction confirmed: https://solscan.io/tx/${signature}`);
-
-          // CRITICAL FIX: Wait for balance to propagate before creating pool
-          // Production environments (Render) have higher latency than localhost
-          // The backend validation checks balance immediately, so we need to ensure it's updated
-          updateStatus(`⏳ Waiting for balance to update (2 seconds)...`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
-
-          // Verify the balance updated successfully
-          const vaultPublicKey = new PublicKey(currentProject.vault_public_key);
-          const updatedBalance = await connection.getBalance(vaultPublicKey);
-          const updatedBalanceSOL = updatedBalance / LAMPORTS_PER_SOL;
-          console.log(`[FUNDING] ✅ Verified new balance: ${updatedBalanceSOL} SOL`);
-          
-          if (selectedToken.isNative && updatedBalanceSOL < Number(amount)) {
-            console.warn(`[FUNDING] ⚠️ Balance not fully updated yet. Expected at least ${amount} SOL, got ${updatedBalanceSOL} SOL`);
-            // Wait a bit more
-            updateStatus(`⏳ Balance still updating, waiting another 2 seconds...`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-          }
-
         } catch (fundingError) {
           console.error(`[FUNDING] ❌ Failed to transfer tokens:`, fundingError);
           throw new Error(`Failed to transfer tokens to treasury: ${fundingError instanceof Error ? fundingError.message : 'Unknown error'}`);
@@ -576,6 +556,12 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
       // Get auth payload from session context
       const authPayload = await adminAuth.getAuthPayload();
       
+      // Get the funding transaction signature if we just funded the treasury
+      const fundingTxSignature = (window as any).__lastFundingTx || null;
+      if (fundingTxSignature) {
+        console.log(`[POOL CREATE] Including funding tx signature: ${fundingTxSignature}`);
+      }
+
       const poolData = mergeAdminAuth(authPayload, {
         name: poolName || `Vesting - ${new Date().toLocaleDateString()}`,
         total_pool_amount: Number(amount),
@@ -595,6 +581,7 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange, onSucces
         token_mint: selectedToken.mint, // Now guaranteed to exist
         claim_fee_lamports: Math.floor((claimFeeUSD / solPrice) * LAMPORTS_PER_SOL), // Convert USD to lamports
         funding_source: fundingSource, // ✅ NEW: Tell backend where to get tokens from ('wallet' or 'treasury')
+        funding_tx_signature: fundingTxSignature, // ✅ NEW: Send funding tx so backend can verify it
       });
 
       // Add better error message for insufficient funds
